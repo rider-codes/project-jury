@@ -36,6 +36,32 @@ def test_dotfiles_can_be_cited():
     assert check_claim(claim("file", "requirements.txt", "fastapi>=0.115 uvicorn>=0.30"), b).ok
 
 
+def test_quotes_survive_harmless_rewrites():
+    b = BRIEF.model_copy(update={"files": {**BRIEF.files,
+        "README.md": "**Live demo**: it's “fast” — run `npm start` then open the app.\n"}})
+    for q in ["Live demo: it's \"fast\" - run npm start", "it’s “fast” — run `npm start`",
+              "Live demo ... open the app", "Live demo…open the app", "\"run npm start then open\""]:
+        assert check_claim(claim("file", "README.md", q), b).ok, q
+
+
+def test_loose_matching_still_rejects_invented_text():
+    b = BRIEF.model_copy(update={"files": {**BRIEF.files, "README.md": "Live demo: run npm start then open the app.\n"}})
+    for q in ["Live demo: run yarn start", "open the app ... Live demo", "Live demo ... fully tested", "... ..."]:
+        assert not check_claim(claim("file", "README.md", q), b).ok, q
+
+
+def test_tree_evidence_present_and_absent():
+    b = BRIEF.model_copy(update={"tree": ["README.md", "requirements.txt", ".github/workflows/tests.yml", "app/main.py"]})
+    assert check_claim(claim("tree", "present", ".github/workflows/tests.yml"), b).ok
+    assert check_claim(claim("tree", "absent", "poetry.lock"), b).ok  # the TaskWrite 'no lockfile' claim
+    assert not check_claim(claim("tree", "absent", "requirements.txt"), b).ok
+    assert not check_claim(claim("tree", "present", "Dockerfile"), b).ok
+    assert not check_claim(claim("tree", "maybe", "Dockerfile"), b).ok
+    cut = b.model_copy(update={"notes": ["file tree cut to 2000 of 5000 paths"]})
+    r = check_claim(claim("tree", "absent", "poetry.lock"), cut)
+    assert not r.ok and "cut" in r.problem
+
+
 def test_missing_file_rejected():
     c = check_claim(claim("file", "src/app.py", "anything here"), BRIEF)
     assert not c.ok and "file not in brief" in c.problem

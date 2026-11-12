@@ -12,6 +12,7 @@ __pycache__/
 # web
 web/node_modules/
 web/.next/
+web/out/
 web/.env.local
 *.tsbuildinfo
 

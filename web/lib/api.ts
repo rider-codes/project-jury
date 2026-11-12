@@ -1,6 +1,9 @@
 import type { Chat, ChatMessage, Persona, ReviewListItem } from "./types";
 
-export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// A production build is served by the API server itself, so it talks to its own origin.
+// `npm run dev` runs on :3000 next to the API on :8000.
+export const API =
+  process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
@@ -21,7 +24,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T,>(path: string, body: unknown) => call<T>(path, { method: "POST", body: JSON.stringify(body) });
 
 export const api = {
+  session: () => call<{ needs_code: boolean; ok: boolean }>("/api/session"),
+  login: (code: string) => post<{ ok: true }>("/api/login", { code }),
   personas: () => call<Persona[]>("/api/personas"),
+  quota: () => call<{ demo_model: boolean; free_quota: { remaining: number; limit: number } | null }>("/api/quota"),
   reviews: () => call<ReviewListItem[]>("/api/reviews"),
   startReview: (body: { repo_url?: string; demo?: string; sample?: boolean; persona_ids: string[] }) =>
     post<{ id: string }>("/api/reviews", body),

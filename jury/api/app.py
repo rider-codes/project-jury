@@ -12,6 +12,7 @@ POST /api/chats/{id}/messages      send one message, get the persona's reply
 """
 
 import asyncio
+import hmac
 import json
 import os
 import uuid
@@ -20,10 +21,12 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from jury.agent import JsonModel
+from jury.api import access
 from jury.api.runner import Busy, Runner
 from jury.api.store import TERMINAL, ReviewStore
 from jury.chat.room_history import load_room
@@ -32,7 +35,9 @@ from jury.chat.store import ChatStore
 from jury.personas import load_all
 from jury.room.state import DEFAULT_ROOM
 
-SAMPLE_BRIEF = Path(__file__).resolve().parent.parent.parent / "examples" / "sample_brief.json"
+ROOT = Path(__file__).resolve().parent.parent.parent
+SAMPLE_BRIEF = ROOT / "examples" / "sample_brief.json"
+WEB_OUT = ROOT / "web" / "out"
 POLL_SECONDS = 0.3
 PING_EVERY = 50  # polls (~15 s)
 
@@ -59,6 +64,10 @@ class ChatMessage(BaseModel):
     text: str = Field(min_length=1, max_length=4_000)
 
 
+class Login(BaseModel):
+    code: str = Field(max_length=200)
+
+
 def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder=None) -> FastAPI:
     """`db_path` holds the LangGraph checkpoints. Reviews, events and chats go in a
     separate `<name>_app.sqlite` beside it: sharing one file let the event log and
@@ -74,6 +83,7 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
 
     app = FastAPI(title="Project Jury")
     app.state.runner = runner
+    app.middleware("http")(access.gate)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=os.environ.get("JURY_WEB_ORIGIN", "http://localhost:3000").split(","),
@@ -91,6 +101,21 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
     def health():
         return {"ok": True}
 
+    @app.get("/api/session")
+    def session(request: Request):
+        return {"needs_code": bool(access.access_code()), "ok": access.has_access(request)}
+
+    @app.post("/api/login")
+    def login(body: Login, request: Request):
+        code = access.access_code()
+        if code and not hmac.compare_digest(body.code.strip(), code):
+            raise HTTPException(401, "wrong access code")
+        response = JSONResponse({"ok": True})
+        secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+        response.set_cookie(access.COOKIE, access.token_for(code), httponly=True, samesite="lax",
+                            secure=secure, max_age=60 * 60 * 24 * 30)
+        return response
+
     # the design canvas order: the default room first
     ORDER = [*DEFAULT_ROOM, "hiring_manager", "open_source_maintainer"]
 
@@ -103,6 +128,14 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
              "default": p.id in DEFAULT_ROOM}
             for p in ordered
         ]
+
+    @app.get("/api/quota")
+    async def quota():
+        """What a review will cost against today's free quota. The page shows it before starting."""
+        llm = llm_factory()
+        demo = type(llm).__name__ == "DemoLLM"
+        q = None if demo or not hasattr(llm, "quota") else await llm.quota()
+        return {"demo_model": demo, "free_quota": q}
 
     @app.post("/api/reviews", status_code=201)
     async def new_review(body: NewReview):
@@ -223,5 +256,11 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
             raise HTTPException(502, f"the model did not answer: {e}"[:400])
         chats.save(s)
         return reply
+
+    # In production the built page (web/out) is served from the same server. Mounted last,
+    # so every /api route above wins.
+    static_dir = Path(os.environ.get("JURY_STATIC_DIR", WEB_OUT))
+    if static_dir.is_dir():
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="web")
 
     return app

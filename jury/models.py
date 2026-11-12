@@ -56,9 +56,11 @@ class Brief(BaseModel):
 
 
 class Evidence(BaseModel):
-    kind: Literal["file", "demo"]
-    ref: str  # file path, or demo step ref
-    quote: str  # exact text from the file or demo step
+    kind: Literal["file", "demo", "tree"]
+    # file: a file path. demo: a demo step ref. tree: "present" or "absent".
+    ref: str
+    # file / demo: exact text from that file or step. tree: a path or file name to look for.
+    quote: str
 
 
 class Claim(BaseModel):

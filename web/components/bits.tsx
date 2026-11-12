@@ -24,8 +24,14 @@ export function Claims({ claims, rejected = [] }: { claims: Claim[]; rejected?: 
         <li key={i} className="claim">
           {c.text}
           <span className="evidence">
-            {c.evidence.kind === "demo" ? "demo " : ""}
-            {c.evidence.ref} · &ldquo;{c.evidence.quote.length > 140 ? c.evidence.quote.slice(0, 140) + "…" : c.evidence.quote}&rdquo;
+            {c.evidence.kind === "tree" ? (
+              <>repo tree · {c.evidence.ref === "absent" ? "no file matching" : "has"} {c.evidence.quote}</>
+            ) : (
+              <>
+                {c.evidence.kind === "demo" ? "demo " : ""}
+                {c.evidence.ref} · &ldquo;{c.evidence.quote.length > 140 ? c.evidence.quote.slice(0, 140) + "…" : c.evidence.quote}&rdquo;
+              </>
+            )}
           </span>
         </li>
       ))}

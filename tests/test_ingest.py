@@ -107,6 +107,26 @@ def test_caps_enforced():
     assert any("left out" in n for n in sel.notes) and any("truncated" in n for n in sel.notes)
 
 
+def test_app_code_and_ui_beat_tooling():
+    """Regression for ledgerline: 7 eval/ scripts made the brief and the whole front-end did not."""
+    assert priority("src/agent.js") < priority("eval/build-questions.js")
+    assert priority("public/landing.html") < priority("eval/run-eval.js")
+    assert priority("public/assets/landing.js") < priority("eval/run-eval.js")
+    assert priority("server.js") <= priority("src/db.js")
+    assert priority("mockups/Login.dc.html") > priority("public/login.html")
+
+    files = {f"eval/tool{i}.js": b"x = 1;\n" * 1500 for i in range(10)}
+    files.update({f"src/mod{i}.js": b"y = 2;\n" * 400 for i in range(5)})
+    files.update({"README.md": b"# r\n\nIntro.\n", "public/landing.html": b"<a href='/login'>Sign in</a>\n",
+                  "public/assets/landing.js": b"hide();\n", "frontend/src/App.tsx": b"export default 1\n"})
+    paths, contents = read_tarball(make_tarball(files))
+    sel = select_files(paths, contents, Caps(max_files=10))
+    picked = list(sel.files)
+    assert "public/landing.html" in picked and "frontend/src/App.tsx" in picked
+    assert all(f"src/mod{i}.js" in picked for i in range(5))
+    assert sum(p.startswith("eval/") for p in picked) <= 2
+
+
 def test_test_files_get_reserved_slots():
     files = {f"src/m{i}.py": b"x = 1\n" * 3000 for i in range(30)}
     files["tests/test_a.py"] = b"def test_a():\n    assert m() == 1\n"

@@ -6,7 +6,7 @@ Reply with ONLY a JSON object of this shape:
   "verdict": "useful" | "unsure" | "not useful",
   "headline": "one short line",
   "reasons": [
-    {{"text": "your point", "evidence": {{"kind": "file" | "demo", "ref": "path/or/step-ref", "quote": "exact text copied from it"}}}}
+    {{"text": "your point", "evidence": {{"kind": "file" | "demo" | "tree", "ref": "path, step-ref, or present/absent", "quote": "exact text copied from it"}}}}
   ],
   "what_would_change_my_mind": ["concrete change"],
   "questions": ["question for the builder, only if something you need is missing"]

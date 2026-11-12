@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useState } from "react";
+import { AccessGate } from "@/components/AccessGate";
 import { ChatView } from "@/components/ChatView";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { RoomView } from "@/components/RoomView";
@@ -35,15 +36,20 @@ export default function Home() {
   const [to, setTo] = useState("");
   const [barText, setBarText] = useState("");
   const [barBusy, setBarBusy] = useState(false);
+  const [quota, setQuota] = useState<{ demo_model: boolean; free_quota: { remaining: number; limit: number } | null } | null>(null);
+
+  const [locked, setLocked] = useState(false);
 
   // personas, and a review or chat from the URL
   useEffect(() => {
+    api.session().then((s) => setLocked(s.needs_code && !s.ok)).catch(() => {});
     api.personas()
       .then((ps) => {
         setPersonas(ps);
         setSelected(ps.filter((p) => p.default).map((p) => p.id));
       })
       .catch(() => setLoadError("Cannot reach the API. Start it with: uv run python -m jury.api"));
+    api.quota().then(setQuota).catch(() => setQuota(null));
     const q = new URLSearchParams(window.location.search);
     if (q.get("review")) setReviewId(q.get("review"));
     if (q.get("chat")) {
@@ -70,6 +76,11 @@ export default function Home() {
   const names = Object.fromEntries(personas.map((p) => [p.id, p.name]));
   const inRoom = started ? room.personaIds : selected;
   const projectName = room.project?.name ?? (started ? "…" : "your project");
+
+  // round 1 + debate (2 turns each, 12 at most) + verdicts + summary
+  const needed = selected.length ? selected.length + Math.min(12, 2 * selected.length) + selected.length + 1 : 0;
+  const left = quota?.free_quota?.remaining ?? null;
+  const short = left !== null && left < needed;
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -122,6 +133,8 @@ export default function Home() {
     }
     setBarBusy(false);
   };
+
+  if (locked) return <AccessGate />;
 
   return (
     <div className="shell">
@@ -209,6 +222,16 @@ export default function Home() {
                                 placeholder={"1. Open the app\n2. Click Start\n3. What you see"} />
                     </div>
                   </div>
+                  {quota && (
+                    <div className={short ? "form-error" : "muted"} style={{ fontSize: 13 }} role={short ? "alert" : undefined}>
+                      {quota.demo_model
+                        ? "Demo model: free and offline, opinions are canned."
+                        : left !== null
+                          ? `Needs about ${needed} model requests · ${left} of ${quota.free_quota!.limit} free requests left today.` +
+                            (short ? " Not enough: it would stop partway. Pick fewer reviewers or wait for the daily reset." : "")
+                          : `Needs about ${needed} model requests.`}
+                    </div>
+                  )}
                   {startError && <div className="form-error">{startError}</div>}
                   <div className="row">
                     <button type="submit" className="btn" disabled={starting || !repo.trim() || !selected.length}>

@@ -1,0 +1,26 @@
+# Render Blueprint: New > Blueprint, pick this repo, then fill in the secrets it asks for.
+# Free plan: the service sleeps after ~15 minutes idle (first visit then takes ~1 minute)
+# and has no persistent disk, so past reviews and chats reset on every deploy or restart.
+services:
+  - type: web
+    name: project-jury
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: JURY_ACCESS_CODE   # required: without it anyone with the URL can spend your quota
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN       # optional: raises GitHub's limit from 60 to 5,000 requests an hour
+        sync: false
+      - key: JURY_PROVIDER
+        value: openrouter
+      - key: JURY_MODEL_CHEAP
+        value: baidu/ernie-5.5-flash-preview:free,nvidia/nemotron-3.5-super-vl:free
+      - key: JURY_MODEL_MID
+        value: nvidia/nemotron-3.5-super-vl:free,baidu/ernie-5.5-flash-preview:free
+      - key: JURY_MODEL_STRONG
+        value: nvidia/nemotron-3.5-super-vl:free
+      - key: JURY_MAX_TOKENS
+        value: "1200000"

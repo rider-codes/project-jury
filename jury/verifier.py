@@ -6,9 +6,49 @@ from jury.models import Brief, Claim, ClaimCheck, Verdict, VerifiedVerdict
 
 MIN_QUOTE_CHARS = 4
 
+# Characters models rewrite without changing the meaning: curly quotes, dashes, ellipses,
+# and markdown emphasis / code marks. Mapped the same way on both sides.
+_SAME = str.maketrans({
+    "‘": "'", "’": "'", "“": '"', "”": '"', "–": "-", "—": "-",
+    "−": "-", " ": " ", "﻿": None, "`": None, "*": None,
+})
+
 
 def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", text.replace("﻿", "")).strip().lower()
+    text = text.translate(_SAME).replace("…", "...")
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _quote_in(quote: str, source: str) -> bool:
+    """True if the quote appears in the source. A '...' in the quote may skip text,
+    but every piece around it must still appear, in order."""
+    q = quote.strip(" \"'")
+    pieces = [p.strip() for p in q.split("...") if p.strip()]
+    if not pieces or any(len(p) < MIN_QUOTE_CHARS for p in pieces):
+        return q in source if q else False
+    at = 0
+    for p in pieces:
+        found = source.find(p, at)
+        if found < 0:
+            return False
+        at = found + len(p)
+    return True
+
+
+def _check_tree(claim: Claim, brief: Brief) -> ClaimCheck:
+    ev = claim.evidence
+    target = _norm(ev.quote).strip("/ \"'")
+    mode = ev.ref.strip().lower()
+    hit = any(target in p.lower() for p in brief.tree)
+    if mode == "present":
+        ok, problem = hit, f"no path in the tree matches {ev.quote!r}"
+    elif mode == "absent":
+        if any(n.startswith("file tree cut") for n in brief.notes):
+            return ClaimCheck(claim=claim, ok=False, problem="the tree was cut, so absence cannot be checked")
+        ok, problem = not hit, f"the tree does contain {ev.quote!r}"
+    else:
+        return ClaimCheck(claim=claim, ok=False, problem="tree evidence needs ref 'present' or 'absent'")
+    return ClaimCheck(claim=claim, ok=ok, problem=None if ok else problem)
 
 
 def _path(ref: str) -> str:
@@ -25,6 +65,8 @@ def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
     if len(quote) < MIN_QUOTE_CHARS:
         return ClaimCheck(claim=claim, ok=False, problem="quote too short")
 
+    if ev.kind == "tree":
+        return _check_tree(claim, brief)
     if ev.kind == "file":
         source = brief.files.get(_path(ev.ref))
         if source is None:
@@ -35,7 +77,7 @@ def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
             return ClaimCheck(claim=claim, ok=False, problem=f"demo step not found: {ev.ref}")
         source = step.text
 
-    if quote not in _norm(source):
+    if not _quote_in(quote, _norm(source)):
         return ClaimCheck(claim=claim, ok=False, problem="quote not found in source")
     return ClaimCheck(claim=claim, ok=True)
 

@@ -58,6 +58,30 @@ def client_events(client, review_id):
     return [e for _, e in store.events_after(review_id)]
 
 
+def test_access_code_gates_the_api(tmp_path, monkeypatch):
+    monkeypatch.setenv("JURY_ACCESS_CODE", "s3cret")
+    app = create_app(str(tmp_path / "j.sqlite"), lambda: DemoLLM(delay=0))
+    with TestClient(app) as c:
+        assert c.get("/api/health").status_code == 200
+        assert c.get("/api/session").json() == {"needs_code": True, "ok": False}
+        assert c.get("/api/personas").status_code == 401
+        assert c.post("/api/reviews", json={"sample": True}).status_code == 401
+        assert c.get("/api/reviews/x/events").status_code == 401
+        assert c.post("/api/login", json={"code": "wrong"}).status_code == 401
+        r = c.post("/api/login", json={"code": "s3cret"})
+        assert r.status_code == 200 and "httponly" in r.headers["set-cookie"].lower()
+        assert c.get("/api/session").json() == {"needs_code": True, "ok": True}
+        assert c.get("/api/personas").status_code == 200
+
+
+def test_no_access_code_means_open(client):
+    assert client.get("/api/session").json() == {"needs_code": False, "ok": True}
+
+
+def test_quota_endpoint_with_demo_model(client):
+    assert client.get("/api/quota").json() == {"demo_model": True, "free_quota": None}
+
+
 def test_personas(client):
     ps = client.get("/api/personas").json()
     assert len(ps) == 6 and sum(p["default"] for p in ps) == 4

@@ -28,7 +28,21 @@ SOURCE_EXT = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java", ".kt", ".rb", ".php",
     ".cs", ".c", ".cpp", ".h", ".swift", ".vue", ".svelte", ".sh", ".sql",
 }
-TEXT_EXT = SOURCE_EXT | {".md", ".txt", ".toml", ".yaml", ".yml", ".json", ".cfg", ".ini", ".rst", ".html", ".css"}
+TEXT_EXT = SOURCE_EXT | {".md", ".txt", ".toml", ".yaml", ".yml", ".json", ".cfg", ".ini", ".rst", ".html", ".css",
+                         ".jinja", ".j2", ".hbs", ".ejs"}
+
+# Folders that hold the product itself, versus folders that hold tooling around it.
+# Ranking by role stops e.g. eval/ scripts crowding out the app's own code and UI.
+APP_DIRS = {
+    "src", "app", "apps", "server", "backend", "frontend", "api", "lib", "pkg", "internal", "cmd",
+    "web", "client", "routes", "components", "pages", "public", "static", "templates", "views", "ui",
+}
+TOOLING_DIRS = {
+    "eval", "evals", "scripts", "script", "tools", "tooling", "mockups", "mocks", "docs", "doc",
+    "bench", "benchmarks", "notebooks", "migrations", "samples", "sample", "data", "datasets",
+}  # not "assets": web apps keep their own JS there (public/assets/)
+UI_EXT = {".html", ".tsx", ".jsx", ".vue", ".svelte", ".jinja", ".j2", ".hbs", ".ejs"}
+UI_DIRS = {"public", "pages", "components", "templates", "views", "ui", "frontend", "client", "web", "static"}
 
 # Real-looking secrets are replaced before anything goes to a model provider.
 SECRET_PATTERNS = [
@@ -50,6 +64,7 @@ class Caps:
     max_total_chars: int = 120_000
     max_tree_paths: int = 2_000
     reserved_test_files: int = 3
+    reserved_ui_files: int = 3
 
 
 @dataclass
@@ -61,6 +76,23 @@ class Selection:
 
 def _is_test(path: str) -> bool:
     return any(k in part.lower() for part in PurePosixPath(path).parts for k in ("test", "spec", "fixture", "example"))
+
+
+def _role(path: str) -> str:
+    """app | tooling | other, from the folders the file sits in."""
+    dirs = [d.lower() for d in PurePosixPath(path).parts[:-1]]
+    if any(d in TOOLING_DIRS for d in dirs):
+        return "tooling"
+    if any(d in APP_DIRS for d in dirs):
+        return "app"
+    return "other"
+
+
+def _is_ui(path: str) -> bool:
+    p = PurePosixPath(path)
+    if _is_test(path) or _role(path) == "tooling":
+        return False
+    return p.suffix in UI_EXT or (p.suffix in SOURCE_EXT and any(d.lower() in UI_DIRS for d in p.parts[:-1]))
 
 
 def is_skipped(path: str) -> bool:
@@ -87,10 +119,19 @@ def priority(path: str) -> int | None:
     if p.suffix not in TEXT_EXT and name not in MANIFESTS:
         return None
     is_test = _is_test(path)
-    if not is_test and p.stem.lower() in ENTRY_STEMS and p.suffix in SOURCE_EXT and depth <= 2:
+    role = _role(path)
+    # depth inside the app's own folder counts from that folder, so src/x.py ranks like x.py
+    app_depth = max(depth - 1, 0) if role == "app" else depth
+    if not is_test and role != "tooling" and p.stem.lower() in ENTRY_STEMS and p.suffix in SOURCE_EXT and depth <= 2:
         return 4
     if p.suffix in SOURCE_EXT:
-        return (9 if is_test else 5) + depth
+        if is_test:
+            return 9 + depth
+        if role == "tooling":
+            return 12 + depth
+        return 5 + app_depth
+    if p.suffix in UI_EXT and role != "tooling":
+        return 8 + app_depth
     if p.suffix in {".md", ".rst"} and depth <= 2:
         return 14 + depth
     return 20 + depth
@@ -123,10 +164,18 @@ def select_files(paths: list[str], contents: dict[str, bytes], caps: Caps = Caps
     ranked = sorted(
         (pr, p) for p in visible if p in contents and (pr := priority(p)) is not None
     )
-    # Reserve early slots for a few test files so reviewers can always judge tests.
-    tests = [r for r in ranked if _is_test(r[1])][: caps.reserved_test_files]
-    ranked = [(min(pr, 4.5), p) if (pr, p) in tests else (pr, p) for pr, p in ranked]
-    ranked.sort()
+    # Reserve early slots for a few test files and UI files, so the Senior engineer can
+    # always judge tests and the UX designer can always see some of the interface.
+    tests = set([r for r in ranked if _is_test(r[1])][: caps.reserved_test_files])
+    # pages and components first (what a user sees), then UI scripts
+    first_screens = {"index", "landing", "home", "login", "signin", "app", "main"}
+    ui_ranked = sorted((r for r in ranked if _is_ui(r[1])),
+                       key=lambda r: (PurePosixPath(r[1]).suffix not in UI_EXT,
+                                      PurePosixPath(r[1]).stem.lower() not in first_screens, r[0], r[1]))
+    ui = set(ui_ranked[: caps.reserved_ui_files])
+    ranked = sorted(
+        (4.5 if r in tests else 4.6 if r in ui else r[0], r[1]) for r in ranked
+    )
     total, redacted, truncated, skipped_for_cap = 0, 0, 0, 0
     for _, path in ranked:
         if len(sel.files) >= caps.max_files or total >= caps.max_total_chars:

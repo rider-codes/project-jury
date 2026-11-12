@@ -13,11 +13,11 @@ Improvements found in the first real runs (ledgerline full review, doorknock one
 
 ## 2. What the reviewers get to see
 
-- [ ] **5. Smarter file picking.** Rank app code (`src/`, `app/`, `server*`) and UI pages above tooling (`eval/`, `scripts/`, `mockups/`, `docs/`); stop alphabetical tie-breaks. Ledgerline's brief had 7 `eval/` scripts but no front-end.
+- [x] **5. Smarter file picking.** Rank app code (`src/`, `app/`, `server*`) and UI pages above tooling (`eval/`, `scripts/`, `mockups/`, `docs/`); stop alphabetical tie-breaks. Ledgerline's brief had 7 `eval/` scripts but no front-end.
 - [ ] **6. Persona-aware briefs.** Shared core plus a few persona-specific files (UI pages for the UX designer, routes and config for the Senior engineer).
 - [ ] **7. Smaller brief.** ~120k characters (~40k tokens) per call is costly; summarise lower-priority files to cut it roughly in half.
-- [ ] **8. Citable file tree.** Allow evidence like "no lockfile exists" against the brief's file list (`kind: tree`).
-- [ ] **9. Looser quote matching.** Tolerate small differences in quotes while still rejecting invented ones.
+- [x] **8. Citable file tree.** Allow evidence like "no lockfile exists" against the brief's file list (`kind: tree`).
+- [x] **9. Looser quote matching.** Tolerate small differences in quotes while still rejecting invented ones.
 - [ ] **10. Debate tools.** Build `read_file` and `search_repo`; needs the full repo stored, not just the brief.
 - [ ] **11. Branch awareness.** Let ingestion pick a branch, or note when other branches differ (doorknock's deploy config is only on `byok`).
 
@@ -40,14 +40,14 @@ Improvements found in the first real runs (ledgerline full review, doorknock one
 
 ## 5. Cost and models
 
-- [ ] **23. Model fallback.** Switch to the next free model when one is rate-limited upstream (Gemma was, on 2026-11-13).
-- [ ] **24. Show quota before starting.** "This review needs ~17 requests, you have N left."
+- [x] **23. Model fallback.** Switch to the next free model when one is rate-limited upstream (Gemma was, on 2026-11-13).
+- [x] **24. Show quota before starting.** "This review needs ~17 requests, you have N left."
 - [ ] **25. Prompt caching.** The brief is identical across calls; caching roughly halves cost on paid models.
 - [ ] **26. Paid tiers.** Bring-your-own-key and a "deep review" mode.
 
 ## 6. Engineering
 
-- [ ] **27. CI for Jury itself.** It flagged missing CI on all three reviewed projects and has none.
+- [x] **27. CI for Jury itself.** It flagged missing CI on all three reviewed projects and has none.
 - [ ] **28. Push to GitHub, then deploy.** Docker plus a free host (SQLite resets there).
 - [ ] **29. Phone width and accessibility pass** on the web page.
 - [ ] **30. One chat store.** The CLI chat writes to `jury.sqlite`, the web chat to `jury_app.sqlite`.
