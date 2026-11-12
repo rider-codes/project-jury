@@ -15,7 +15,7 @@ A panel of AI personas that review a software project and say whether it is usef
 - Orchestration: LangGraph (fan-out, code router node, interrupts) with a SQLite checkpointer from the first graph
 - Models: OpenRouter free models or Gemini free tier for dev, behind one `llm.py` wrapper
 - `llm.py` owns: provider swap, tier-to-model map (`cheap` / `mid` / `strong`), concurrency limit, backoff on rate limits, per-review call and token budget, prompt caching of the brief
-- Storage: SQLite (sessions, briefs, room history). Free hosts have no persistent disk, so history resets there.
+- Storage: SQLite. LangGraph checkpoints live in `jury.sqlite`; the API's reviews, event log and chats live in `jury_app.sqlite` beside it (one shared file made the two writers lock each other). Free hosts have no persistent disk, so history resets there.
 - Frontend: Next.js. Server-Sent Events for the live stream, plain POST for user answers. No WebSocket.
 - Deployment: Docker, free tier host
 
@@ -86,6 +86,12 @@ Personas are just prompts in `personas/*.yaml`. Each file has `cares_about`, `ru
 - Small functions, one LangGraph node per file where possible.
 - Write tests for the router logic, the question-dedupe step, and the claim verifier.
 - Never commit API keys. Use `.env` and `.env.example`.
+
+## Running locally
+
+- API: `uv run python -m jury.api` (real models from `.env`), or `--demo-model` for a free offline stand-in while working on the UI.
+- Web: `cd web && npm install && npm run dev`, then open http://localhost:3000. Set `NEXT_PUBLIC_API_URL` if the API is not on port 8000.
+- Tests: `uv run pytest` and `cd web && npx tsc --noEmit`.
 
 ## Build milestones
 

@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-demo",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "jury.api", "--demo-model", "--db", "jury_demo.sqlite"],
+      "cwd": "D:\\Rahul\\Project Jury",
+      "port": 8000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "jury.api"],
+      "cwd": "D:\\Rahul\\Project Jury",
+      "port": 8000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "D:\\Rahul\\Project Jury\\web",
+      "port": 3000
+    }
+  ]
+}

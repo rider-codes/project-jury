@@ -1,0 +1,133 @@
+import json
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+
+from jury.api.app import create_app
+from jury.api.demo_llm import DemoLLM
+from jury.ingest.github import IngestError
+from jury.models import Brief
+
+
+@pytest.fixture
+def client(tmp_path):
+    def fake_builder(url, demo, token):
+        if "broken" in url:
+            raise IngestError("not found (private repos are not supported in v1)")
+        return Brief(project_name="widget", repo_url="https://github.com/o/widget", summary="A widget.",
+                     files={"README.md": "# widget\n\nA widget that does things well.\n"}, tree=["README.md"])
+
+    app = create_app(str(tmp_path / "j.sqlite"), lambda: DemoLLM(delay=0), brief_builder=fake_builder)
+    with TestClient(app) as c:
+        yield c
+
+
+def wait_for(client, review_id, statuses, timeout=20):
+    end = time.time() + timeout
+    while time.time() < end:
+        r = client.get(f"/api/reviews/{review_id}").json()
+        if r["status"] in statuses and not r["running"]:
+            return r["status"]
+        time.sleep(0.05)
+    raise AssertionError(f"review stuck in {r['status']}")
+
+
+def sse(client, review_id, last_id=None):
+    headers = {"Last-Event-ID": str(last_id)} if last_id else {}
+    events, ids = [], []
+    with client.stream("GET", f"/api/reviews/{review_id}/events", headers=headers) as resp:
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        for block in resp.read().decode().split("\n\n"):
+            lines = dict(l.split(": ", 1) for l in block.splitlines() if ": " in l and not l.startswith(":"))
+            if "data" in lines and lines.get("event") != "end":
+                events.append(json.loads(lines["data"]))
+                ids.append(int(lines["id"]))
+    return events, ids
+
+
+def run_to_done(client, review_id):
+    while wait_for(client, review_id, {"paused", "done", "error"}) == "paused":
+        qs = [e for e in client_events(client, review_id) if e["type"] == "needs_answers"][-1]["questions"]
+        assert client.post(f"/api/reviews/{review_id}/answers", json={"answers": {q["id"]: "" for q in qs}}).status_code == 202
+    return client.get(f"/api/reviews/{review_id}").json()["status"]
+
+
+def client_events(client, review_id):
+    store = client.app.state.runner.store
+    return [e for _, e in store.events_after(review_id)]
+
+
+def test_personas(client):
+    ps = client.get("/api/personas").json()
+    assert len(ps) == 6 and sum(p["default"] for p in ps) == 4
+    assert {"id", "name", "tagline", "tier", "verdict_question"} <= set(ps[0])
+
+
+@pytest.mark.parametrize("body", [
+    {"persona_ids": ["senior_engineer"]},  # no repo and not sample
+    {"sample": True, "persona_ids": []},
+    {"sample": True, "persona_ids": ["security_reviewer"]},
+    {"repo_url": "https://gitlab.com/a/b"},
+])
+def test_new_review_validation(client, body):
+    assert client.post("/api/reviews", json=body).status_code == 422
+
+
+def test_sample_review_end_to_end_over_sse(client):
+    rid = client.post("/api/reviews", json={"sample": True, "persona_ids": ["senior_engineer", "ux_designer", "general_user"]}).json()["id"]
+    assert run_to_done(client, rid) == "done"
+
+    events, ids = sse(client, rid)
+    types = [e["type"] for e in events]
+    assert types[0] == "brief" and events[0]["project_name"] == "tasklite"
+    for t in ("impression", "router", "debate_turn", "verdict", "summary", "done", "usage"):
+        assert t in types, t
+    assert ids == sorted(ids) and len(set(ids)) == len(ids)
+
+    # reconnecting with Last-Event-ID replays only what came after
+    later, later_ids = sse(client, rid, last_id=ids[-3])
+    assert later_ids == ids[-2:]
+
+    listed = client.get("/api/reviews").json()
+    assert listed[0]["id"] == rid and listed[0]["status"] == "done"
+
+
+def test_answers_only_when_paused(client):
+    rid = client.post("/api/reviews", json={"sample": True, "persona_ids": ["senior_engineer"]}).json()["id"]
+    status = wait_for(client, rid, {"paused", "done"})
+    if status == "done":
+        assert client.post(f"/api/reviews/{rid}/answers", json={"answers": {}}).status_code == 409
+    assert client.post("/api/reviews/nope/answers", json={"answers": {}}).status_code == 404
+
+
+def test_repo_review_and_ingest_failure(client):
+    rid = client.post("/api/reviews", json={"repo_url": "https://github.com/o/widget", "demo": "1. open it"}).json()["id"]
+    assert client.get(f"/api/reviews/{rid}").json()["project_name"] == "widget"
+    assert run_to_done(client, rid) == "done"
+    assert client_events(client, rid)[0] == {"type": "status", "stage": "ingesting", "repo_url": "https://github.com/o/widget"}
+
+    bad = client.post("/api/reviews", json={"repo_url": "https://github.com/o/broken"}).json()["id"]
+    assert wait_for(client, bad, {"error"}) == "error"
+    events, _ = sse(client, bad)  # stream closes on error
+    assert events[-1]["type"] == "error" and "private repos" in events[-1]["message"]
+
+
+def test_chat_clean_and_with_room_history(client):
+    rid = client.post("/api/reviews", json={"sample": True, "persona_ids": ["senior_engineer", "product_manager"]}).json()["id"]
+    run_to_done(client, rid)
+
+    clean = client.post("/api/chats", json={"persona_id": "senior_engineer", "review_id": rid}).json()
+    assert clean["with_history"] is False and clean["project_name"] == "tasklite"
+    linked = client.post("/api/chats", json={"persona_id": "senior_engineer", "review_id": rid, "with_history": True}).json()
+    assert linked["with_history"] is True and linked["room_thread"] == rid
+
+    reply = client.post(f"/api/chats/{linked['id']}/messages", json={"text": "What would you fix first?"}).json()
+    assert reply["role"] == "agent" and reply["claims"]
+    assert len(client.get(f"/api/chats/{linked['id']}").json()["messages"]) == 2
+
+    sample = client.post("/api/chats", json={"persona_id": "ux_designer", "sample": True})
+    assert sample.status_code == 201
+    assert client.post("/api/chats", json={"persona_id": "nobody", "sample": True}).status_code == 422
+    assert client.post("/api/chats/nope/messages", json={"text": "hi"}).status_code == 404
+    assert client.post(f"/api/chats/{clean['id']}/messages", json={"text": ""}).status_code == 422

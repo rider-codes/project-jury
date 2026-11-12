@@ -9,5 +9,11 @@ __pycache__/
 *.sqlite-shm
 *.db
 
+# web
+web/node_modules/
+web/.next/
+web/.env.local
+*.tsbuildinfo
+
 # default output of `python -m jury.ingest`; briefs can hold copied repo code
 /brief.json
