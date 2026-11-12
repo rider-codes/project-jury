@@ -1,0 +1,142 @@
+"""Typed models shared across the app."""
+
+from enum import Enum
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class Tier(str, Enum):
+    cheap = "cheap"
+    mid = "mid"
+    strong = "strong"
+
+
+class RubricItem(BaseModel):
+    id: str
+    check: str
+    fail_when: str
+
+
+class Persona(BaseModel):
+    id: str
+    name: str
+    tagline: str
+    model: Tier
+    verdict_question: str
+    cares_about: list[str]
+    voice: str
+    system_prompt: str
+    rubric: list[RubricItem] = Field(min_length=1)
+    question_triggers: list[str]
+
+
+class DemoStep(BaseModel):
+    ref: str  # e.g. "step-3"
+    text: str
+
+
+class Brief(BaseModel):
+    """The shared project brief every agent reads."""
+
+    project_name: str
+    repo_url: str
+    summary: str
+    files: dict[str, str]  # path -> content (already capped by ingestion)
+    tree: list[str] = []  # every path in the repo, so agents know what exists beyond `files`
+    demo: list[DemoStep] = []
+    notes: list[str] = []  # what ingestion left out or changed (caps hit, secrets redacted)
+
+
+class Evidence(BaseModel):
+    kind: Literal["file", "demo"]
+    ref: str  # file path, or demo step ref
+    quote: str  # exact text from the file or demo step
+
+
+class Claim(BaseModel):
+    text: str
+    evidence: Evidence
+
+
+class VerdictValue(str, Enum):
+    useful = "useful"
+    unsure = "unsure"
+    not_useful = "not useful"
+
+
+class Verdict(BaseModel):
+    """Structured output of one persona. Read by code, never parsed from free text."""
+
+    verdict: VerdictValue
+    headline: str
+    reasons: list[Claim]
+    what_would_change_my_mind: list[str]
+    questions: list[str] = []
+
+
+class FirstImpression(BaseModel):
+    """Round 1 output. The stance is locked once round 1 ends."""
+
+    stance: VerdictValue
+    headline: str
+    claims: list[Claim]
+    questions: list[str] = []
+
+
+class MergedQuestion(BaseModel):
+    id: str  # q1, q2, ...
+    text: str
+    asked_by: list[str]  # persona ids
+
+
+class DebateTurn(BaseModel):
+    """One debate turn. Every field except `message` is read by the code router."""
+
+    message: str  # 3 to 5 sentences, in character
+    claims: list[Claim] = []
+    stance: VerdictValue
+    stance_change_reason: str | None = None
+    new_point: bool
+    challenges: list[str] = []  # persona ids this turn disputes
+    open_question: str | None = None
+
+
+class ChatReply(BaseModel):
+    """One-on-one mode: one persona's reply to the builder."""
+
+    message: str  # 3 to 5 sentences, in character
+    claims: list[Claim] = []
+    stance: VerdictValue  # where the persona stands now
+    question: str | None = None  # something only the builder can answer
+
+
+class RouterDecision(BaseModel):
+    action: Literal["speak", "ask_user", "end"]
+    speaker: str | None = None
+    reason: str
+
+
+class RoomSummary(BaseModel):
+    headline: str
+    agreed: list[str] = []
+    split: list[str] = []
+    top_changes: list[str] = []
+
+
+class ClaimCheck(BaseModel):
+    claim: Claim
+    ok: bool
+    problem: str | None = None
+
+
+class VerifiedVerdict(BaseModel):
+    persona_id: str
+    verdict: Verdict  # reasons hold only claims that passed
+    rejected: list[ClaimCheck]
+
+
+class VerifiedImpression(BaseModel):
+    persona_id: str
+    impression: FirstImpression  # claims hold only claims that passed
+    rejected: list[ClaimCheck]

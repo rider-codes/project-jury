@@ -1,0 +1,16 @@
+{
+  "project_name": "tasklite",
+  "repo_url": "https://github.com/example/tasklite",
+  "summary": "A command-line to-do app that stores tasks in a local JSON file. Hand-written sample brief for milestone 1.",
+  "files": {
+    "README.md": "# tasklite\n\nA tiny to-do list for your terminal.\n\n## Install\n\npip install tasklite\n\n## Usage\n\ntasklite add \"buy milk\"\ntasklite list\ntasklite done 1\n\nTasks are saved to ~/.tasklite.json.\n",
+    "tasklite/cli.py": "import argparse\nimport json\nfrom pathlib import Path\n\nDB = Path.home() / \".tasklite.json\"\n\n\ndef load():\n    if not DB.exists():\n        return []\n    return json.loads(DB.read_text())\n\n\ndef save(tasks):\n    DB.write_text(json.dumps(tasks))\n\n\ndef main():\n    p = argparse.ArgumentParser()\n    sub = p.add_subparsers(dest=\"cmd\")\n    a = sub.add_parser(\"add\")\n    a.add_argument(\"text\")\n    sub.add_parser(\"list\")\n    d = sub.add_parser(\"done\")\n    d.add_argument(\"n\", type=int)\n    args = p.parse_args()\n    tasks = load()\n    if args.cmd == \"add\":\n        tasks.append({\"text\": args.text, \"done\": False})\n    elif args.cmd == \"list\":\n        for i, t in enumerate(tasks, 1):\n            print(i, \"[x]\" if t[\"done\"] else \"[ ]\", t[\"text\"])\n    elif args.cmd == \"done\":\n        tasks[args.n - 1][\"done\"] = True\n    save(tasks)\n",
+    "tests/test_cli.py": "def test_placeholder():\n    assert True\n",
+    ".env.example": "# no settings needed\n"
+  },
+  "demo": [
+    {"ref": "step-1", "text": "I run tasklite add \"buy milk\" and nothing is printed."},
+    {"ref": "step-2", "text": "I run tasklite list and see: 1 [ ] buy milk"},
+    {"ref": "step-3", "text": "I run tasklite done 5 with only one task and the app crashes with IndexError."}
+  ]
+}
