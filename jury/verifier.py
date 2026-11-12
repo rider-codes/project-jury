@@ -8,7 +8,15 @@ MIN_QUOTE_CHARS = 4
 
 
 def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip().lower()
+    return re.sub(r"\s+", " ", text.replace("﻿", "")).strip().lower()
+
+
+def _path(ref: str) -> str:
+    """Drop a leading './' only. (lstrip('./') also ate the dot in .github/ and .gitignore.)"""
+    ref = ref.strip()
+    while ref.startswith("./"):
+        ref = ref[2:]
+    return ref.lstrip("/")
 
 
 def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
@@ -18,7 +26,7 @@ def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
         return ClaimCheck(claim=claim, ok=False, problem="quote too short")
 
     if ev.kind == "file":
-        source = brief.files.get(ev.ref.lstrip("./"))
+        source = brief.files.get(_path(ev.ref))
         if source is None:
             return ClaimCheck(claim=claim, ok=False, problem=f"file not in brief: {ev.ref}")
     else:
@@ -39,7 +47,7 @@ def verify_claims(claims: list[Claim], brief: Brief) -> tuple[list[Claim], list[
         if not c.ok:
             continue
         ev = c.claim.evidence
-        key = (ev.kind, ev.ref.lstrip("./"), _norm(ev.quote))
+        key = (ev.kind, _path(ev.ref), _norm(ev.quote))
         if key in seen:  # the same evidence cited twice adds nothing
             continue
         seen.add(key)

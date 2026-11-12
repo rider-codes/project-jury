@@ -180,6 +180,44 @@ def test_stale_debate_ends_after_one_full_round():
     assert events[-1]["type"] == "done"
 
 
+def test_tight_budget_cuts_the_debate_not_the_verdicts():
+    """Regression for the ledgerline run: the cap ran out mid-review and all 4 verdicts were lost."""
+    from langgraph.checkpoint.memory import InMemorySaver
+    from jury.llm import Budget
+
+    class BudgetedLLM(ScriptedLLM):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self.budget = Budget(max_calls=60, max_tokens=400_000)
+
+        async def complete_json(self, tier, messages):
+            self.budget.reserve()
+            self.budget.record(45_000)
+            return await super().complete_json(tier, messages)
+
+    ids = ROOM[:4]
+    llm = BudgetedLLM(
+        impressions={p: impression("unsure") for p in ids},
+        debates={p: [debate("unsure", [q for q in ids if q != p][:1])] for p in ids},
+        verdicts={p: verdict("unsure") for p in ids},
+    )
+
+    async def go():
+        graph = build_graph(llm, PERSONAS, InMemorySaver())
+        config = {"configurable": {"thread_id": "b"}}
+        events = await collect(graph, initial_state(BRIEF, ids), config)
+        return events, (await graph.aget_state(config)).values
+
+    events, values = asyncio.run(go())
+    end = next(e for e in events if e["type"] == "router" and e["action"] == "end")
+    assert "budget" in end["reason"]
+    assert len(values["turns"]) < Caps().total_for(4)  # debate was cut short
+    assert set(values["verdicts"]) == set(ids)  # but every verdict arrived
+    assert not values.get("verdict_failures")
+    # the cap is checked before each call, so the last parallel calls may overshoot by less than one call
+    assert llm.budget.tokens < llm.budget.max_tokens + 45_000
+
+
 def test_summary_falls_back_to_code_when_model_fails():
     llm = ScriptedLLM(
         impressions={p: impression("useful") for p in ROOM[:2]},

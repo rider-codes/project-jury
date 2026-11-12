@@ -131,6 +131,29 @@ def test_user_message_to_persona_without_turns_left_is_not_forced():
     assert d.speaker != "general_user"
 
 
+def test_low_budget_ends_debate_before_anything_else():
+    turns = [turn("senior_engineer", open_question="Is it deployed?")]
+    d = decide(ROOM, AGREE, turns, set(), budget_ok=False)
+    assert d.action == "end" and "budget" in d.reason
+
+
+def test_budget_reserve_counts_verdicts_and_summary():
+    from jury.llm import Budget
+    from jury.room.router import reserve_ok
+
+    class M:
+        budget = Budget(max_calls=60, max_tokens=500_000)
+
+    m = M()
+    m.budget.calls, m.budget.tokens = 11, 11 * 45_000  # the ledgerline run: ~45k tokens a call
+    assert not reserve_ok(m, 4)  # 6 more calls would not fit
+    m.budget.max_tokens = 1_200_000
+    assert reserve_ok(m, 4)
+    m.budget.calls, m.budget.tokens = 0, 0
+    assert reserve_ok(m, 4)  # no history yet: nothing to estimate from
+    assert reserve_ok(object(), 4)  # models without a budget are never blocked
+
+
 def test_empty_room_ends():
     assert decide([], {}, [], set()).action == "end"
 

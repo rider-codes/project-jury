@@ -56,6 +56,31 @@ def test_gives_up_after_max_attempts():
         asyncio.run(final_verdict(llm, load_persona("general_user"), BRIEF))
 
 
+def test_empty_debate_message_is_rejected():
+    """Regression: a free model returned a debate turn with message "" and it was accepted."""
+    from pydantic import ValidationError
+    from jury.models import ChatReply, DebateTurn
+
+    base = {"stance": "unsure", "new_point": False}
+    for bad in ("", "   ", "ok"):
+        with pytest.raises(ValidationError):
+            DebateTurn.model_validate({**base, "message": bad})
+        with pytest.raises(ValidationError):
+            ChatReply.model_validate({"stance": "unsure", "message": bad})
+    assert DebateTurn.model_validate({**base, "message": "  I disagree with the PM.  "}).message == "I disagree with the PM."
+
+
+def test_empty_debate_turn_gets_one_retry():
+    from jury.agent import debate_turn
+
+    good = {"message": "The tests are placeholders, so nothing is verified.", "stance": "not useful",
+            "new_point": True, "claims": [], "challenges": [], "open_question": None}
+    llm = FakeLLM([{**good, "message": ""}, good])
+    turn, _ = asyncio.run(debate_turn(llm, load_persona("senior_engineer"), BRIEF, "<room_transcript/>",
+                                      "unsure", {"product_manager": "Product manager"}))
+    assert turn.message.startswith("The tests") and len(llm.calls) == 2
+
+
 def test_brief_is_wrapped_as_data():
     msg = brief_message(BRIEF)
     assert msg.startswith("<project_brief>") and msg.endswith("</project_brief>")

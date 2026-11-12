@@ -25,6 +25,17 @@ def test_leading_dot_slash_path_accepted():
     assert check_claim(claim("file", "./README.md", "tiny to-do list"), BRIEF).ok
 
 
+def test_dotfiles_can_be_cited():
+    """Regression: lstrip('./') turned .env.example into env.example, so dotfiles always failed."""
+    assert check_claim(claim("file", ".env.example", "no settings needed"), BRIEF).ok
+    assert check_claim(claim("file", "./.env.example", "no settings needed"), BRIEF).ok
+    b = BRIEF.model_copy(update={"files": {**BRIEF.files, ".github/workflows/tests.yml": "run: pytest -q\n",
+                                           "requirements.txt": "﻿fastapi>=0.115\nuvicorn>=0.30\n"}})
+    assert check_claim(claim("file", ".github/workflows/tests.yml", "run: pytest -q"), b).ok
+    # a byte-order mark at the start of a file must not break the first line's quote
+    assert check_claim(claim("file", "requirements.txt", "fastapi>=0.115 uvicorn>=0.30"), b).ok
+
+
 def test_missing_file_rejected():
     c = check_claim(claim("file", "src/app.py", "anything here"), BRIEF)
     assert not c.ok and "file not in brief" in c.problem

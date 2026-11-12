@@ -32,7 +32,7 @@ class Budget:
     """Per-review cap on calls and tokens."""
 
     max_calls: int = 60
-    max_tokens: int = 500_000
+    max_tokens: int = 1_200_000
     calls: int = 0
     tokens: int = 0
 
@@ -45,6 +45,13 @@ class Budget:
 
     def record(self, tokens: int) -> None:
         self.tokens += tokens
+
+    def can_afford(self, calls: int, margin: float = 1.25) -> bool:
+        """Would `calls` more calls of the average size so far still fit?"""
+        if self.calls + calls > self.max_calls:
+            return False
+        avg = self.tokens / self.calls if self.calls else 0
+        return self.tokens + calls * avg * margin <= self.max_tokens
 
 
 @dataclass
@@ -73,7 +80,7 @@ class LLM:
             models=models,
             budget=Budget(
                 max_calls=int(os.environ.get("JURY_MAX_CALLS", 60)),
-                max_tokens=int(os.environ.get("JURY_MAX_TOKENS", 500_000)),
+                max_tokens=int(os.environ.get("JURY_MAX_TOKENS", 1_200_000)),
             ),
             max_concurrency=int(os.environ.get("JURY_MAX_CONCURRENCY", 2)),
         )

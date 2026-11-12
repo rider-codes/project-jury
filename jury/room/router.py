@@ -2,6 +2,7 @@
 the user, and ends the debate. No model call is ever made here.
 
 Order of rules:
+0. The budget can no longer cover the verdicts and summary -> end now.
 1. The latest turn has an open question not yet asked -> ask the user, at most
    2 times per debate, and never a question the user was already asked.
 2. Turn cap reached (2 per agent, 12 total at most) -> end.
@@ -44,9 +45,13 @@ def decide(
     user_message: dict | None = None,
     caps: Caps = Caps(),
     asked_texts: list[str] = (),
+    budget_ok: bool = True,
 ) -> RouterDecision:
     if not active:
         return RouterDecision(action="end", reason="nobody is left to debate")
+
+    if not budget_ok:  # the verdicts matter more than one more debate turn
+        return RouterDecision(action="end", reason="stopping to keep enough budget for the final verdicts")
 
     if turns:
         last_i = len(turns) - 1
@@ -113,7 +118,26 @@ def is_repeat(question: str, asked_texts) -> bool:
     return any(contained(toks, _tokens(t)) for t in asked_texts)
 
 
-def node(state: RoomState) -> dict:
+def reserve_ok(llm, n_active: int) -> bool:
+    """Can the budget still pay for one more debate turn, then every verdict and the summary?"""
+    budget = getattr(llm, "budget", None)
+    if budget is None or not hasattr(budget, "can_afford"):
+        return True
+    return budget.can_afford(1 + n_active + 1)
+
+
+def make_node(llm):
+    def node(state: RoomState) -> dict:
+        return _node(state, reserve_ok(llm, len(active_personas(state))))
+
+    return node
+
+
+def node(state: RoomState) -> dict:  # budget-blind variant, kept for tests and callers without a model
+    return _node(state, True)
+
+
+def _node(state: RoomState, budget_ok: bool) -> dict:
     turns = state.get("turns") or []
     decision = decide(
         active_personas(state),
@@ -122,6 +146,7 @@ def node(state: RoomState) -> dict:
         set(state.get("asked_turns") or []),
         state.get("user_message"),
         asked_texts=[q["text"] for q in state.get("qa_log") or []],
+        budget_ok=budget_ok,
     )
     update: dict = {"next_action": decision.model_dump()}
     if decision.action == "ask_user":

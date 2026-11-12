@@ -3,7 +3,14 @@
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints
+
+# Text people read. Blank or near-blank replies (seen from a free model in a real run) are
+# rejected, so the model is asked once more and a second failure counts as a failed turn.
+Said = Annotated[str, StringConstraints(strip_whitespace=True, min_length=10)]
+Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class Tier(str, Enum):
@@ -69,7 +76,7 @@ class Verdict(BaseModel):
     """Structured output of one persona. Read by code, never parsed from free text."""
 
     verdict: VerdictValue
-    headline: str
+    headline: Short
     reasons: list[Claim]
     what_would_change_my_mind: list[str]
     questions: list[str] = []
@@ -79,7 +86,7 @@ class FirstImpression(BaseModel):
     """Round 1 output. The stance is locked once round 1 ends."""
 
     stance: VerdictValue
-    headline: str
+    headline: Short
     claims: list[Claim]
     questions: list[str] = []
 
@@ -93,7 +100,7 @@ class MergedQuestion(BaseModel):
 class DebateTurn(BaseModel):
     """One debate turn. Every field except `message` is read by the code router."""
 
-    message: str  # 3 to 5 sentences, in character
+    message: Said  # 3 to 5 sentences, in character
     claims: list[Claim] = []
     stance: VerdictValue
     stance_change_reason: str | None = None
@@ -105,7 +112,7 @@ class DebateTurn(BaseModel):
 class ChatReply(BaseModel):
     """One-on-one mode: one persona's reply to the builder."""
 
-    message: str  # 3 to 5 sentences, in character
+    message: Said  # 3 to 5 sentences, in character
     claims: list[Claim] = []
     stance: VerdictValue  # where the persona stands now
     question: str | None = None  # something only the builder can answer
@@ -118,7 +125,7 @@ class RouterDecision(BaseModel):
 
 
 class RoomSummary(BaseModel):
-    headline: str
+    headline: Short
     agreed: list[str] = []
     split: list[str] = []
     top_changes: list[str] = []

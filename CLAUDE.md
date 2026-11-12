@@ -72,8 +72,10 @@ Personas are just prompts in `personas/*.yaml`. Each file has `cares_about`, `ru
 
 ## Cost
 
-- Estimate per review (5 personas, 10 debate turns): about 370k input and 16k output tokens. Input dominates because each call re-sends the brief.
-- With mixed tiers and prompt caching: about $0.25 to $0.50. Mid tier everywhere: about $0.60 to $1.35. Frontier tier: $3 or more. These prices are assumptions; recheck them before pricing.
+- Measured on real runs (2026-11-13): a repo at the 120k-character brief cap costs about 35k to 46k tokens per call (ledgerline 46k, doorknock 34k, TaskWrite chat 39k). A small repo costs far less (the sample brief: about 6k per call).
+- A default review is 4 + 8 + 4 + 1 = 17 calls, so about 770k input and 17k output tokens for a capped repo. Input dominates because each call re-sends the brief. (The earlier 370k estimate was about 2x too low.)
+- Per review for a capped repo, prices assumed (recheck before pricing): mixed tiers (Senior engineer on mid) about $0.50 to $0.80; mid tier everywhere about $2.60; frontier about $13. Caching the brief cuts these by roughly 70%; halving the brief (BACKLOG 7) halves them again.
+- `JURY_MAX_TOKENS` defaults to 1.2M per review. The router ends the debate early when the rest of the budget could not cover every verdict and the summary, so a tight budget shortens the debate instead of losing the verdicts.
 - Levers: prompt caching, code router, room size, cheap tier for round 1 and the summary.
 - Paid version: charge per review or by credits, with a "deep review" option that uses a stronger tier for the senior engineer. Keep the per-review token budget in `llm.py` so one huge repo cannot erase the margin.
 - Public deployment: bring-your-own-key or a per-IP limit.
