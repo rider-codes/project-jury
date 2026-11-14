@@ -14,13 +14,13 @@ type Props = {
 };
 
 function statusLine(id: string, inRoom: boolean, started: boolean, stance?: Stance, st?: PersonaState) {
-  if (!started) return inRoom ? { text: "In the room", color: "#A6B0CC" } : { text: "Add to room", color: "#A6B0CC" };
-  if (!inRoom) return { text: "Not in this review", color: "#8F9AB8" };
-  if (st === "waiting") return { text: "Waiting for you", color: "#A5B4FC" };
-  if (st === "error") return { text: "Could not answer", color: "#FCA5A5" };
-  if (st === "thinking") return { text: "Thinking", color: "#A6B0CC", thinking: true };
+  if (!started) return inRoom ? { text: "In the room", color: "var(--muted)" } : { text: "Add to room", color: "var(--muted)" };
+  if (!inRoom) return { text: "Not in this review", color: "var(--faint)" };
+  if (st === "waiting") return { text: "Waiting for you", color: "var(--ask)" };
+  if (st === "error") return { text: "Could not answer", color: "var(--not-useful)" };
+  if (st === "thinking") return { text: "Thinking", color: "var(--muted)", thinking: true };
   if (stance) return { text: STANCE_LABEL[stance], color: STANCE_COLOR[stance] };
-  return { text: "", color: "#A6B0CC" };
+  return { text: "", color: "var(--muted)" };
 }
 
 export function PersonaPicker({ personas, selected, onToggle, stance = {}, state = {}, speaking, single }: Props) {
@@ -36,6 +36,7 @@ export function PersonaPicker({ personas, selected, onToggle, stance = {}, state
             type="button"
             className={`persona ${on ? "" : "off"} ${speaking === p.id ? "speaking" : ""}`}
             style={accentStyle(p.id)}
+            data-p={p.id}
             aria-pressed={single ? undefined : on}
             role={single ? "radio" : undefined}
             aria-checked={single ? on : undefined}

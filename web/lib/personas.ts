@@ -12,10 +12,11 @@ export const ACCENT: Record<string, string> = {
 
 export const accent = (id: string) => ACCENT[id] ?? "#A6B0CC";
 
+/** CSS variables, so a theme can recolour verdicts (the defaults in globals.css match the old values). */
 export const STANCE_COLOR: Record<Stance, string> = {
-  useful: "#86EFAC",
-  unsure: "#FCD34D",
-  "not useful": "#FCA5A5",
+  useful: "var(--useful)",
+  unsure: "var(--unsure)",
+  "not useful": "var(--not-useful)",
 };
 
 export const STANCE_LABEL: Record<Stance, string> = {

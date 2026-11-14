@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useState } from "react";
-import { AccessGate } from "@/components/AccessGate";
 import { ChatView } from "@/components/ChatView";
+import { Showcase } from "@/components/Showcase";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { RoomView } from "@/components/RoomView";
 import { Icon } from "@/components/bits";
-import { api } from "@/lib/api";
+import { ThemeSwitch, useTheme } from "@/components/Theme";
+import { api, type Quota } from "@/lib/api";
 import { ROUND_LABEL, emptyRoom, roomReducer } from "@/lib/room";
 import type { Chat, Persona, ReviewListItem } from "@/lib/types";
 
@@ -19,6 +20,7 @@ function setUrl(params: Record<string, string | null>) {
 }
 
 export default function Home() {
+  const [dark, pickTheme] = useTheme();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("room");
@@ -36,13 +38,20 @@ export default function Home() {
   const [to, setTo] = useState("");
   const [barText, setBarText] = useState("");
   const [barBusy, setBarBusy] = useState(false);
-  const [quota, setQuota] = useState<{ demo_model: boolean; free_quota: { remaining: number; limit: number } | null } | null>(null);
+  const [quota, setQuota] = useState<Quota | null>(null);
 
-  const [locked, setLocked] = useState(false);
+  // checking: nothing is drawn yet, so a private deployment never flashes the app before the showcase
+  const [access, setAccess] = useState<"checking" | "locked" | "open">("checking");
+
+  useEffect(() => {
+    api.session()
+      .then((s) => setAccess(s.needs_code && !s.ok ? "locked" : "open"))
+      .catch(() => setAccess("open")); // API down: show the app, which explains it cannot reach the API
+  }, []);
 
   // personas, and a review or chat from the URL
   useEffect(() => {
-    api.session().then((s) => setLocked(s.needs_code && !s.ok)).catch(() => {});
+    if (access !== "open") return;
     api.personas()
       .then((ps) => {
         setPersonas(ps);
@@ -55,7 +64,7 @@ export default function Home() {
     if (q.get("chat")) {
       api.chat(q.get("chat")!).then((c) => { setChat(c); setMode("chat"); }).catch(() => setUrl({ chat: null }));
     }
-  }, []);
+  }, [access]);
 
   // live event stream for the review on screen; replays from the start on reload
   useEffect(() => {
@@ -134,10 +143,11 @@ export default function Home() {
     setBarBusy(false);
   };
 
-  if (locked) return <AccessGate />;
+  if (access === "checking") return <div className={`shell sc-page${dark ? " dark" : ""}`} aria-busy="true" />;
+  if (access === "locked") return <Showcase />;
 
   return (
-    <div className="shell">
+    <div className={`shell sc-page sc-app${dark ? " dark" : ""}`}>
       <nav className="rail" aria-label="Main">
         <button type="button" className="rail-btn primary" aria-label="New review" title="New review" onClick={newReview}>{Icon.plus()}</button>
         <button type="button" className="rail-btn" aria-label="Past reviews" title="Past reviews" aria-expanded={drawer} onClick={openDrawer}>{Icon.history}</button>
@@ -163,8 +173,12 @@ export default function Home() {
       <main className="main">
         <div className="column">
           <div className="topbar">
-            <div className="crumb">Project reviews / {projectName}</div>
+            <div className="row" style={{ gap: 16 }}>
+              <img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} />
+              <div className="crumb">/ {projectName}</div>
+            </div>
             <div className="row">
+              <ThemeSwitch dark={dark} onPick={pickTheme} />
               <div className="toggle" role="group" aria-label="Mode">
                 <button type="button" aria-pressed={mode === "room"} onClick={() => setMode("room")}>Room</button>
                 <button type="button" aria-pressed={mode === "chat"} onClick={() => setMode("chat")}>One-on-one</button>

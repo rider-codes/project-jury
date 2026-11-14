@@ -23,11 +23,16 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 const post = <T,>(path: string, body: unknown) => call<T>(path, { method: "POST", body: JSON.stringify(body) });
 
+export type Quota = {
+  demo_model: boolean;
+  free_quota: { remaining: number; limit: number } | null;
+};
+
 export const api = {
   session: () => call<{ needs_code: boolean; ok: boolean }>("/api/session"),
   login: (code: string) => post<{ ok: true }>("/api/login", { code }),
   personas: () => call<Persona[]>("/api/personas"),
-  quota: () => call<{ demo_model: boolean; free_quota: { remaining: number; limit: number } | null }>("/api/quota"),
+  quota: () => call<Quota>("/api/quota"),
   reviews: () => call<ReviewListItem[]>("/api/reviews"),
   startReview: (body: { repo_url?: string; demo?: string; sample?: boolean; persona_ids: string[] }) =>
     post<{ id: string }>("/api/reviews", body),

@@ -10,13 +10,22 @@ type Props = {
   names: Record<string, string>;
   personas: Persona[];
   onAnswer: (answers: Record<string, string>) => Promise<void>;
+  readOnly?: boolean; // the public replay: questions are shown, not answered
+  compact?: boolean; // the public replay: one claim per card, short debate turns
 };
 
-export function RoomView({ room, names, onAnswer }: Props) {
+/** The first sentence, for the compact replay. */
+function short(text: string): string {
+  const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g);
+  return parts && parts.length > 1 ? parts.slice(0, 1).join("").trim() : text;
+}
+
+export function RoomView({ room, names, onAnswer, readOnly, compact }: Props) {
+  const limit = compact ? 1 : undefined;
   const name = (id: string) => names[id] ?? id;
   const questionCard = room.pending && room.status !== "done" ? (
     <QuestionCard key={room.pending.map((q) => q.id).join()} questions={room.pending} names={names}
-                  onAnswer={onAnswer} ready={room.status === "paused"} />
+                  onAnswer={onAnswer} ready={room.status === "paused"} readOnly={readOnly} />
   ) : null;
   return (
     <>
@@ -40,7 +49,7 @@ export function RoomView({ room, names, onAnswer }: Props) {
                   <StanceBadge stance={imp.stance} />
                 </div>
                 <div className="headline">{imp.headline}</div>
-                <Claims claims={imp.claims} rejected={imp.rejected} />
+                <Claims claims={imp.claims} rejected={imp.rejected} limit={limit} brief={compact} />
               </article>
             ))}
             {room.personaIds
@@ -56,8 +65,11 @@ export function RoomView({ room, names, onAnswer }: Props) {
       )}
 
       {room.answered.length > 0 && (
-        <section className="section">
-          <div className="label">Your answers</div>
+        <details className="section answered-list" open={room.answered.length <= 3}>
+          <summary className="label" style={{ cursor: "pointer" }}>
+            Your answers · {room.answered.length} question{room.answered.length > 1 ? "s" : ""} asked,{" "}
+            {room.answered.filter((a) => a.answer).length} answered
+          </summary>
           {room.answered.map(({ question, answer }) => (
             <div key={question.id} className="answered">
               <strong style={{ color: "var(--text-2)" }}>{question.text}</strong>
@@ -65,7 +77,7 @@ export function RoomView({ room, names, onAnswer }: Props) {
               {answer ? answer : <em>Skipped</em>}
             </div>
           ))}
-        </section>
+        </details>
       )}
 
       {room.round < 2 && questionCard}
@@ -89,13 +101,13 @@ export function RoomView({ room, names, onAnswer }: Props) {
                     <div className="msg muted">Could not respond this turn.</div>
                   ) : (
                     <>
-                      <div className="msg">{item.turn.message}</div>
+                      <div className="msg">{compact ? short(item.turn.message) : item.turn.message}</div>
                       {item.turn.stance_changed && (
                         <div className="change">
                           Changed stance to {item.turn.stance}: {item.turn.stance_change_reason}
                         </div>
                       )}
-                      <Claims claims={item.turn.claims} rejected={item.turn.rejected} />
+                      {!compact && <Claims claims={item.turn.claims} rejected={item.turn.rejected} />}
                       {item.turn.challenges.length > 0 && (
                         <div className="evidence">challenges {item.turn.challenges.map(name).join(", ")}</div>
                       )}
@@ -124,12 +136,12 @@ export function RoomView({ room, names, onAnswer }: Props) {
                   <StanceBadge stance={v.verdict} />
                 </div>
                 <div className="headline">{v.headline}</div>
-                <Claims claims={v.reasons} rejected={v.rejected} />
-                {v.what_would_change_my_mind.length > 0 && (
+                <Claims claims={v.reasons} rejected={v.rejected} limit={limit} brief={compact} />
+                {!compact && v.what_would_change_my_mind.length > 0 && (
                   <div className="body" style={{ fontSize: 14 }}>
                     <strong>What would change my mind:</strong>
                     <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                      {v.what_would_change_my_mind.map((w, i) => <li key={i}>{w}</li>)}
+                      {v.what_would_change_my_mind.slice(0, compact ? 1 : undefined).map((w, i) => <li key={i}>{w}</li>)}
                     </ul>
                   </div>
                 )}
@@ -180,11 +192,12 @@ export function RoomView({ room, names, onAnswer }: Props) {
   );
 }
 
-function QuestionCard({ questions, names, onAnswer, ready }: {
+function QuestionCard({ questions, names, onAnswer, ready, readOnly }: {
   questions: { id: string; text: string; asked_by: string[] }[];
   names: Record<string, string>;
   onAnswer: (a: Record<string, string>) => Promise<void>;
   ready: boolean;
+  readOnly?: boolean;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
@@ -208,28 +221,30 @@ function QuestionCard({ questions, names, onAnswer, ready }: {
           <span id="ask-title" style={{ fontSize: 16, fontWeight: 800 }}>
             The room has {questions.length === 1 ? "a question" : `${questions.length} questions`}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ask)" }}>Waiting for your reply · leave one blank to skip it</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ask)" }}>
+            {readOnly ? "In a live review the room pauses here for your answers. In this run they were skipped." : "Waiting for your reply · leave one blank to skip it"}
+          </span>
         </div>
       </div>
       {questions.map((q) => (
         <div key={q.id} className="ask-q">
           <label htmlFor={`a-${q.id}`} className="text">{q.text}</label>
           <span className="evidence">asked by {q.asked_by.map((p) => names[p] ?? p).join(", ")}</span>
-          <textarea
+          {!readOnly && <textarea
             id={`a-${q.id}`}
             className="textarea"
             placeholder="Type your answer"
             value={answers[q.id] ?? ""}
             onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-          />
+          />}
         </div>
       ))}
       {error && <div className="form-error">{error}</div>}
-      <div className="row">
+      {!readOnly && <div className="row">
         <button type="button" className="btn" onClick={submit} disabled={sending || !ready}>
           {sending ? "Sending…" : "Send answers"}
         </button>
-      </div>
+      </div>}
     </section>
   );
 }

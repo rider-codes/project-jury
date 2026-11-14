@@ -1,0 +1,311 @@
+/* ===================== showcase colour scheme: Cobalt (light) and Cobalt dark =====================
+   Flat surfaces, hairline borders, one accent. No gradients, no glows, no per-reviewer neon.
+   Everything is driven by variables, so the two themes differ only in the values below. */
+
+.check { color: #0a0e1a; } /* the picker's tick on the old pastel accent; themes override */
+
+.sc-page {
+  --bg: #f1f3f6;
+  --panel: #ffffff;
+  --panel-2: #f6f8fb;
+  --line: #d9dee6;
+  --line-2: #c3cad6;
+  --input-line: #aeb7c6;
+  --card: #e8ecf3;
+  --text: #151c28;
+  --text-2: #222b3a;
+  --text-3: #3a4558;
+  --muted: #566073;
+  --faint: #6a7487;
+  --ask: #2447d6;
+  --ask-bg: #e6ecfd;
+  --useful: #1b7a4b;
+  --unsure: #9a6200;
+  --not-useful: #bb3a2c;
+  --sc-accent: #2447d6;
+  --sc-on-accent: #ffffff;
+  --sc-hl: #d4defc;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.sc-page.dark {
+  --bg: #0f131a;
+  --panel: #171c25;
+  --panel-2: #1b212c;
+  --line: #2a3140;
+  --line-2: #3a4356;
+  --input-line: #4a556b;
+  --card: #232b38;
+  --text: #eef1f6;
+  --text-2: #dde2eb;
+  --text-3: #bfc7d4;
+  --muted: #9aa5b5;
+  --faint: #8590a2;
+  --ask: #7c97ff;
+  --ask-bg: #1b2547;
+  --useful: #5ec38a;
+  --unsure: #e0a64a;
+  --not-useful: #f07b6c;
+  --sc-accent: #7c97ff;
+  --sc-on-accent: #0b1020;
+  --sc-hl: #26345f;
+}
+
+/* one accent for every reviewer: they are told apart by their drawings and names, not by six colours */
+.sc-page * { --accent: var(--sc-accent) !important; }
+
+/* buttons */
+.sc-page .btn { background: var(--sc-accent); color: var(--sc-on-accent); }
+.sc-page .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--input-line); }
+.sc-page .btn:focus-visible, .sc-page .link-btn:focus-visible, .sc-page :focus-visible { outline-color: var(--sc-accent); }
+.sc-page .pill { background: var(--panel); }
+.sc-page .link-btn { color: var(--text) !important; }
+
+/* cards and panels: flat, hairline, no inner highlight */
+.sc-page .card, .sc-page .bubble, .sc-page .inputs, .sc-page .summary.ready { box-shadow: none; }
+.sc-page .inputs { background: var(--panel); }
+.sc-page .summary { border-color: var(--line-2); }
+.sc-page .ask { box-shadow: none; }
+.sc-page .check { color: var(--sc-on-accent); }
+
+/* portraits: ink drawings on a plain tile, no glow */
+.sc-page .portrait, .sc-page .avatar, .sc-page .sc-mini, .sc-page .sc-seat-ring {
+  background: var(--card); border: 1.5px solid var(--line-2); box-shadow: none;
+}
+.sc-page .persona.off .portrait { background: transparent; border: 1.5px dashed var(--line-2); }
+.sc-page .persona.speaking .portrait { box-shadow: 0 0 0 2px var(--sc-accent); }
+.sc-page .who, .sc-page .bubble .name { color: var(--text); }
+.sc-page .sc-seat-name { color: var(--text-2); }
+.sc-page .sc-bubble { background: var(--panel); border-color: var(--line-2); }
+
+/* hero: hairline lines, a flat project card, a plain scan line */
+.sc-page .sc-signal { stroke: var(--sc-accent); opacity: 0.55; }
+.sc-page .sc-project { background: var(--panel); border: 1px solid var(--line-2); box-shadow: none; }
+.sc-page .sc-project-bar { border-bottom-color: var(--line); }
+.sc-page .sc-project-files span { background: var(--bg); }
+.sc-page .sc-scan { height: 2px; background: var(--sc-accent); opacity: 0.45; }
+
+/* stats: solid numbers, not gradient text */
+.sc-page .sc-stat-n { background: none; -webkit-text-fill-color: currentColor; color: var(--sc-accent); }
+
+/* how it works */
+.sc-page .sc-art { background: var(--panel-2); border-color: var(--line); }
+.sc-page .sc-stage:not(:last-child)::after { background: var(--sc-accent); color: var(--sc-on-accent); }
+.sc-page .sc-file { background: var(--panel); }
+.sc-page .sc-brief, .sc-page .sc-merge { color: var(--sc-accent); }
+.sc-page .sc-merge span { background: var(--ask-bg); border-color: var(--sc-accent); }
+.sc-page .sc-say span:not(.sc-mini) { background: var(--panel); border-color: var(--line-2); }
+
+/* evidence demo */
+.sc-page .sc-ev-file mark { background: var(--sc-hl); color: var(--text); box-shadow: none; }
+.sc-page .sc-ev-arrow.ok { background: var(--useful); }
+.sc-page .sc-ev-arrow.bad { background: repeating-linear-gradient(90deg, var(--not-useful) 0 6px, transparent 6px 11px); }
+.sc-page .sc-ev-file .ln { color: var(--line-2); }
+
+/* replay layout bits */
+.sc-page .evidence { color: var(--faint); }
+.sc-page .note { color: var(--faint); }
+
+/* theme switch */
+.sc-switch { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); }
+.sc-switch button { min-height: 36px; padding: 0 12px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; }
+.sc-switch button[aria-pressed="true"] { background: var(--sc-accent); color: var(--sc-on-accent); }
+
+/* ===================== richer layer: more personality, still flat ===================== */
+
+.sc-page {
+  --hi: #ffe14d;            /* highlighter marker */
+  --hl: #ffeb8a;            /* soft highlight behind quoted code */
+  --edge: #151c28;          /* hard outline */
+  --shadow-hard: #151c28;   /* flat offset shadow */
+  --tile-senior_engineer: #d3e0ff;
+  --tile-product_manager: #ffe2bf;
+  --tile-ux_designer: #f8d4e4;
+  --tile-general_user: #cdeedb;
+  --tile-hiring_manager: #e1d8fb;
+  --tile-open_source_maintainer: #f6e7b3;
+  overflow-x: clip;
+}
+.sc-page.dark {
+  --hi: #e6c84a;
+  --hl: #5c4e14;
+  --edge: #3a4356;
+  --shadow-hard: #7c97ff;
+  --tile-senior_engineer: #26385e;
+  --tile-product_manager: #4a3622;
+  --tile-ux_designer: #4a2a3a;
+  --tile-general_user: #20443a;
+  --tile-hiring_manager: #35305a;
+  --tile-open_source_maintainer: #4a4220;
+}
+.sc-page [data-p="senior_engineer"] { --tile: var(--tile-senior_engineer); }
+.sc-page [data-p="product_manager"] { --tile: var(--tile-product_manager); }
+.sc-page [data-p="ux_designer"] { --tile: var(--tile-ux_designer); }
+.sc-page [data-p="general_user"] { --tile: var(--tile-general_user); }
+.sc-page [data-p="hiring_manager"] { --tile: var(--tile-hiring_manager); }
+.sc-page [data-p="open_source_maintainer"] { --tile: var(--tile-open_source_maintainer); }
+
+/* each reviewer gets a flat colour tile, like a sticker */
+.sc-page .portrait, .sc-page .avatar, .sc-page .sc-mini, .sc-page .sc-seat-ring { background: var(--tile, var(--card)); }
+.sc-page .sc-seat-ring { border: 2px solid var(--edge); }
+.sc-page .portrait { border: 2px solid var(--edge); box-shadow: 4px 4px 0 var(--shadow-hard); }
+.sc-page .persona.off .portrait { box-shadow: none; }
+.sc-page .persona.speaking .portrait { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--shadow-hard); }
+.sc-page .check { border: 2px solid var(--edge); }
+
+/* headline: a highlighter mark under one word */
+.sc-page .sc-mark {
+  color: #151c28; background: linear-gradient(var(--hi), var(--hi)) 0 90% / 100% 0.5em no-repeat;
+  padding: 0 0.06em; margin: 0 -0.06em;
+}
+.sc-page .sc-hero-copy h1 { font-size: clamp(54px, 4.6vw, 84px); letter-spacing: -0.035em; line-height: 1.02; }
+
+/* graph paper behind the jury arc */
+@media (min-width: 721px) {
+  /* the grid is its own layer, so only the paper fades at the edges, not the reviewers on it */
+  .sc-page .sc-hero { isolation: isolate; }
+  .sc-page .sc-hero::before {
+    content: ""; position: absolute; inset: 0 -40px -24px; z-index: -1; pointer-events: none;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 55%, #000 40%, transparent 78%);
+    mask-image: radial-gradient(ellipse at 50% 55%, #000 40%, transparent 78%);
+  }
+}
+
+/* hard-edged cards with flat offset shadows */
+.sc-page .sc-stage, .sc-page .sc-ev-claim, .sc-page .sc-ev-file, .sc-page .sc-project {
+  border: 2px solid var(--edge); box-shadow: 5px 5px 0 var(--shadow-hard);
+}
+.sc-page .sc-ev-file.missing { border-style: dashed; box-shadow: none; }
+.sc-page .sc-art { border: 1.5px solid var(--edge); }
+.sc-page .sc-stage h3 { font-size: 22px; letter-spacing: -0.01em; }
+
+/* full-width bands break the column */
+.sc-bleed { width: 100vw; margin-left: calc(50% - 50vw); }
+.sc-band { background: var(--sc-accent); color: var(--sc-on-accent); }
+.sc-page .sc-band .sc-stats {
+  max-width: 1400px; margin: 0 auto; padding: 40px 48px; gap: 0; border: none; border-radius: 0; background: transparent; overflow: visible;
+}
+.sc-page .sc-band .sc-stat { background: transparent; padding: 0 28px; border-left: 2px solid color-mix(in srgb, var(--sc-on-accent) 40%, transparent); }
+.sc-page .sc-band .sc-stat:first-child { border-left: none; padding-left: 0; }
+.sc-page .sc-band .sc-stat-n { color: var(--sc-on-accent); font-size: clamp(52px, 5.2vw, 92px); line-height: 1; letter-spacing: -0.04em; }
+.sc-page .sc-band .sc-stat-l { color: color-mix(in srgb, var(--sc-on-accent) 88%, transparent); font-size: 15px; font-weight: 700; }
+
+/* ticker tape of real findings */
+.sc-ticker { overflow: hidden; background: var(--text); color: var(--bg); border-block: 2px solid var(--edge); padding: 14px 0; }
+.sc-ticker-track { display: flex; width: max-content; animation: sc-tape 70s linear infinite; }
+.sc-ticker-row { display: flex; flex: none; }
+.sc-tick { flex: none; padding: 0 28px; font-family: var(--mono); font-size: 14px; white-space: nowrap; }
+.sc-tick b { color: var(--hi); margin-right: 10px; }
+@keyframes sc-tape { to { transform: translateX(-50%); } }
+
+/* section kickers and bigger section headings */
+.sc-kicker { display: block; margin-bottom: 8px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sc-accent); }
+.sc-page .section-head h2 { font-size: clamp(28px, 2.4vw, 40px); letter-spacing: -0.02em; line-height: 1.1; }
+
+/* rubber stamps */
+.sc-page .sc-ev-verdict {
+  font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.14em; font-size: 15px;
+  border: 3px solid currentColor; border-radius: 6px; padding: 12px 6px; transform: rotate(-6deg);
+  box-shadow: inset 0 0 0 2px var(--bg), inset 0 0 0 3px currentColor;
+}
+.sc-page .sc-ev-verdict.bad { transform: rotate(5deg); }
+
+/* panel tiles sit a little bigger */
+.sc-page .personas { gap: 26px 18px; }
+
+/* footer */
+.sc-footer { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; padding: 22px 0 8px; border-top: 2px solid var(--edge); }
+
+@media (max-width: 900px) {
+  .sc-page .sc-band .sc-stats { grid-template-columns: 1fr 1fr; padding: 28px 20px; row-gap: 24px; }
+  .sc-page .sc-band .sc-stat:nth-child(3) { border-left: none; padding-left: 0; }
+}
+@media (max-width: 720px) {
+  .sc-page .sc-hero-copy h1 { font-size: 40px; }
+  .sc-page .sc-ev-verdict { transform: rotate(-3deg); }
+  .sc-page .sc-ev-verdict.bad { transform: rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-ticker-track { animation: none; }
+  .sc-ticker { overflow-x: auto; }
+}
+/* dark: the marker covers the whole word, so its dark text never sits on the dark page */
+.sc-page.dark .sc-mark { background-size: 100% 0.86em; background-position: 0 62%; }
+
+/* ---- the app behind the access code, in the same theme ---- */
+.sc-app .column { max-width: 1160px; }
+.sc-app .rail { background: var(--panel); border-right: 2px solid var(--edge); }
+.sc-app .rail-btn { color: var(--text); }
+.sc-app .rail-btn svg { stroke: var(--text); }
+.sc-app .rail-btn.primary { background: var(--sc-accent); box-shadow: 3px 3px 0 var(--shadow-hard); border: 2px solid var(--edge); }
+.sc-app .rail-btn.primary svg, .sc-app .send svg { stroke: var(--sc-on-accent); }
+.sc-app .rail-btn:hover:not(.primary) { background: var(--bg); }
+.sc-app .send { background: var(--sc-accent); }
+.sc-app .toggle { background: var(--panel); border: 2px solid var(--edge); }
+.sc-app .toggle button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.sc-app .drawer { background: var(--panel); border-right: 2px solid var(--edge); }
+.sc-app .drawer-item { background: var(--bg); border: 2px solid var(--line); }
+.sc-app .bar { background: var(--panel); border: 2px solid var(--edge); box-shadow: 5px 5px 0 var(--shadow-hard); }
+.sc-app .me { background: var(--bg); border: 1px solid var(--line); }
+
+/* ===== Midnight Cobalt: a calmer dark. Deep blue-black, no bright slabs, no glow ===== */
+.sc-page.dark {
+  --bg: #0a0f1c;
+  --panel: #111a2e;
+  --panel-2: #141f36;
+  --card: #18243f;
+  --line: #22304f;
+  --line-2: #2c3c63;
+  --input-line: #3a4d7a;
+  --text: #e8edf8;
+  --text-2: #d3dbee;
+  --text-3: #b3bfd9;
+  --muted: #93a1c0;
+  --faint: #7d8bab;
+  --edge: #2c3c63;
+  --shadow-hard: #04070e;
+  --sc-hl: #1d2c57;
+  --tile-senior_engineer: #1c2c52;
+  --tile-product_manager: #3a2c1e;
+  --tile-ux_designer: #3a2236;
+  --tile-general_user: #183a35;
+  --tile-hiring_manager: #2a2752;
+  --tile-open_source_maintainer: #38331c;
+}
+/* headline highlight: cobalt bar with white text instead of a yellow marker */
+.sc-page.dark .sc-mark { color: #fff; background-image: linear-gradient(#2f4bd0, #2f4bd0); }
+/* stats: a dark panel with accent numbers, not a bright slab */
+.sc-page.dark .sc-band { background: var(--panel); color: var(--text); border-block: 1px solid var(--line-2); }
+.sc-page.dark .sc-band .sc-stat { border-left-color: var(--line-2); }
+.sc-page.dark .sc-band .sc-stat-n { color: var(--sc-accent); }
+.sc-page.dark .sc-band .sc-stat-l { color: var(--muted); font-weight: 600; }
+/* ticker: a quiet strip */
+.sc-page.dark .sc-ticker { background: var(--panel); color: var(--text-3); border-block: 1px solid var(--line-2); }
+.sc-page.dark .sc-tick b { color: var(--sc-accent); }
+/* cards: neutral depth instead of accent-coloured offsets */
+.sc-page.dark .sc-stage, .sc-page.dark .sc-ev-claim, .sc-page.dark .sc-ev-file, .sc-page.dark .sc-project {
+  border: 1px solid var(--line-2); box-shadow: 0 6px 0 -2px var(--shadow-hard); background: var(--panel-2);
+}
+.sc-page.dark .sc-stage:not(:last-child)::after { background: var(--sc-accent); color: var(--sc-on-accent); }
+.sc-page.dark .sc-hero::before { opacity: 0.5; }
+
+/* dark accent: a clean azure instead of the purple-ish periwinkle; big numbers in plain off-white */
+.sc-page.dark {
+  --sc-accent: #4f9cf5;
+  --sc-on-accent: #04152b;
+  --ask: #4f9cf5;
+  --ask-bg: #11233d;
+  --sc-hl: #14305a;
+}
+.sc-page.dark .sc-mark { background-image: linear-gradient(#1f5fc4, #1f5fc4); }
+.sc-page.dark .sc-band .sc-stat-n { color: var(--text); }
+
+/* the status pill sits on the heading line, one line below the kicker */
+.sc-page .section-head { align-items: flex-end; }
+.sc-page .section-head .pill { margin-bottom: 4px; }
+.sc-logo { height: 44px; width: auto; display: block; }
