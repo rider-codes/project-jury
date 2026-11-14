@@ -154,8 +154,8 @@ export default function Home() {
   return (
     <div className={`shell sc-page sc-app${dark ? " dark" : ""}`}>
       <nav className="rail" aria-label="Main">
-        <button type="button" className="rail-btn primary" aria-label="New review" title="New review" onClick={newReview}>{Icon.plus()}</button>
         <a className="rail-btn" href="/?view=home" aria-label="Dashboard" title="Back to the dashboard">{Icon.home}</a>
+        <button type="button" className="rail-btn primary" aria-label="New review" title="New review" onClick={newReview}>{Icon.plus()}</button>
         <button type="button" className="rail-btn" aria-label="Past reviews" title="Past reviews" aria-expanded={drawer} onClick={openDrawer}>{Icon.history}</button>
       </nav>
 
@@ -182,6 +182,11 @@ export default function Home() {
             <div className="row" style={{ gap: 16 }}>
               <a href="/?view=home" aria-label="Project Jury home"><img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} /></a>
               <div className="crumb">/ {projectName}</div>
+              {mode === "room" && (
+                <span className="sc-status">
+                  {room.status === "done" ? "Review complete" : room.status === "paused" ? `${ROUND_LABEL[room.round]} · waiting for you` : ROUND_LABEL[room.round]}
+                </span>
+              )}
             </div>
             <div className="row">
               <ThemeSwitch dark={dark} onPick={pickTheme} />
@@ -189,11 +194,6 @@ export default function Home() {
                 <button type="button" aria-pressed={mode === "room"} onClick={() => setMode("room")}>Room</button>
                 <button type="button" aria-pressed={mode === "chat"} onClick={() => setMode("chat")}>One-on-one</button>
               </div>
-              {mode === "room" && (
-                <div className="pill">
-                  {room.status === "done" ? "Review complete" : room.status === "paused" ? `${ROUND_LABEL[room.round]} · waiting for you` : ROUND_LABEL[room.round]}
-                </div>
-              )}
             </div>
           </div>
 

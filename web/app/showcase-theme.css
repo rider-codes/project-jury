@@ -309,3 +309,14 @@
 .sc-page .section-head { align-items: flex-end; }
 .sc-page .section-head .pill { margin-bottom: 4px; }
 .sc-logo { height: 44px; width: auto; display: block; }
+
+/* app top bar: the theme switch and mode toggle share one height and centre line */
+.sc-app .topbar .row { align-items: center; }
+.sc-app .topbar .sc-switch, .sc-app .topbar .toggle, .sc-app .topbar .pill {
+  box-sizing: border-box; height: 48px; display: inline-flex; align-items: center;
+}
+.sc-app .topbar .toggle { padding: 4px; }
+.sc-app .topbar .toggle button, .sc-app .topbar .sc-switch button { height: 100%; min-height: 0; }
+.sc-app .topbar .pill { padding: 0 14px; }
+/* review status: a small tag beside the project name, not a control in the top bar */
+.sc-app .sc-status { font-family: var(--mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
