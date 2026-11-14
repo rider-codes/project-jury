@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import "./showcase.css";
 import "./showcase-theme.css";
 
-const sans = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["500", "700", "800"], variable: "--font-sans" });
-const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["500"], variable: "--font-mono" });
+// fonts ship with the app (no download at build time): Plus Jakarta Sans (variable weight) and
+// JetBrains Mono 500, both SIL Open Font License, latin subset
+const sans = localFont({ src: "./fonts/PlusJakartaSans-latin.woff2", weight: "200 800", variable: "--font-sans", display: "swap" });
+const mono = localFont({ src: "./fonts/JetBrainsMono-latin.woff2", weight: "500", variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Project Jury",
