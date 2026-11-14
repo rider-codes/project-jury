@@ -40,6 +40,10 @@ export default function Home() {
   const [barBusy, setBarBusy] = useState(false);
   const [quota, setQuota] = useState<Quota | null>(null);
 
+  // ?view=home: the public dashboard, reachable from the app's Home button
+  const [home, setHome] = useState(false);
+  useEffect(() => { setHome(new URLSearchParams(window.location.search).get("view") === "home"); }, []);
+
   // checking: nothing is drawn yet, so a private deployment never flashes the app before the showcase
   const [access, setAccess] = useState<"checking" | "locked" | "open">("checking");
 
@@ -145,11 +149,13 @@ export default function Home() {
 
   if (access === "checking") return <div className={`shell sc-page${dark ? " dark" : ""}`} aria-busy="true" />;
   if (access === "locked") return <Showcase />;
+  if (home) return <Showcase signedIn />;
 
   return (
     <div className={`shell sc-page sc-app${dark ? " dark" : ""}`}>
       <nav className="rail" aria-label="Main">
         <button type="button" className="rail-btn primary" aria-label="New review" title="New review" onClick={newReview}>{Icon.plus()}</button>
+        <a className="rail-btn" href="/?view=home" aria-label="Dashboard" title="Back to the dashboard">{Icon.home}</a>
         <button type="button" className="rail-btn" aria-label="Past reviews" title="Past reviews" aria-expanded={drawer} onClick={openDrawer}>{Icon.history}</button>
       </nav>
 
@@ -174,7 +180,7 @@ export default function Home() {
         <div className="column">
           <div className="topbar">
             <div className="row" style={{ gap: 16 }}>
-              <img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} />
+              <a href="/?view=home" aria-label="Project Jury home"><img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} /></a>
               <div className="crumb">/ {projectName}</div>
             </div>
             <div className="row">
@@ -250,9 +256,6 @@ export default function Home() {
                   <div className="row">
                     <button type="submit" className="btn" disabled={starting || !repo.trim() || !selected.length}>
                       {starting ? "Starting…" : "Start review"}
-                    </button>
-                    <button type="button" className="btn ghost" disabled={starting || !selected.length} onClick={() => start(true)}>
-                      Try the sample project
                     </button>
                     <span className="muted" style={{ fontSize: 13 }}>Public repos only. A review takes 1 to 3 minutes.</span>
                   </div>

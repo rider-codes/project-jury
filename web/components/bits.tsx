@@ -54,6 +54,9 @@ export const Icon = {
   plus: (c = "#0A0E1A") => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
   ),
+  home: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A6B0CC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9H14v-6h-4v6H4z" /></svg>
+  ),
   history: (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A6B0CC" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h16v11H10l-6 4z" /></svg>
   ),

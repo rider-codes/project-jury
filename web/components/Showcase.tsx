@@ -53,7 +53,8 @@ function stats(rec: Recording): [string, string][] {
   ];
 }
 
-export function Showcase() {
+/** The public dashboard. signedIn: reached from the app's Home button, so it links back instead of asking for a code. */
+export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
   const [rec, setRec] = useState<Recording | null>(null);
   const [room, dispatch] = useReducer(roomReducer, emptyRoom);
   const [pos, setPos] = useState(0); // events applied so far
@@ -116,8 +117,8 @@ export function Showcase() {
             <img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} />
             <div className="row">
               <ThemeSwitch dark={dark} onPick={pickTheme} />
-              <a className="btn ghost" href="#access" style={{ display: "inline-grid", placeItems: "center", textDecoration: "none" }}>
-                I have an access code
+              <a className="btn ghost" href={signedIn ? "/" : "#access"} style={{ display: "inline-grid", placeItems: "center", textDecoration: "none" }}>
+                {signedIn ? "Open the app" : "I have an access code"}
               </a>
             </div>
           </div>
@@ -200,7 +201,9 @@ export function Showcase() {
           </section>
 
           <section className="section" id="access" style={{ alignItems: "flex-start" }}>
-            <AccessForm id="showcase-code" />
+            {signedIn
+              ? <a className="btn" href="/" style={{ display: "inline-grid", placeItems: "center", textDecoration: "none" }}>Open the app and review your project</a>
+              : <AccessForm id="showcase-code" />}
           </section>
 
           <footer className="sc-footer">
