@@ -17,14 +17,16 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONUNBUFFERED=1
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
+# Headless Chromium for capturing a project's live site, in a shared path so the non-root user
+# can use it. Before the code is copied, so a code change does not download the browser again.
+# libatomic1: Playwright's own Node needs it and the slim image does not have it.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1     && /app/.venv/bin/python -m playwright install --with-deps --only-shell chromium     && rm -rf /var/lib/apt/lists/* && chmod -R a+rX /ms-playwright
 COPY jury/ jury/
 COPY personas/ personas/
 COPY prompts/ prompts/
 COPY examples/ examples/
 RUN uv sync --frozen --no-dev
-# headless Chromium for capturing a project's live site (shared path so the non-root user can use it)
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN /app/.venv/bin/python -m playwright install --with-deps --only-shell chromium && chmod -R a+rX /ms-playwright
 COPY --from=web /web/out web/out
 
 RUN useradd --create-home jury && mkdir -p /app/data && chown jury /app/data
