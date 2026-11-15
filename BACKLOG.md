@@ -25,17 +25,17 @@ Improvements found in the first real runs (ledgerline full review, doorknock one
 
 - [ ] **12. Eval set.** 3 to 5 known repos (good, weak, misleading README) to check the panel can praise as well as criticise. Rerun after prompt or model changes.
 - [ ] **13. Check reasoning, not just quotes.** The verifier confirms a quote exists, not that the point drawn from it is right. Add a cheap second-pass check.
-- [ ] **14. Real debate when everyone agrees.** On ledgerline all four started "unsure" and nobody challenged anyone. Nudge one reviewer to argue the other side.
-- [ ] **15. Builder answers as evidence.** Make the user's answers citable, marked as coming from the builder.
+- [x] **14. Real debate when everyone agrees.** On ledgerline all four started "unsure" and nobody challenged anyone. Nudge one reviewer to argue the other side.
+- [x] **15. Builder answers as evidence.** Make the user's answers citable, marked as coming from the builder.
 
 ## 4. Product features
 
 - [x] **16. Live website review.** Headless browser capture plus a vision model into a citable site log.
 - [ ] **17. Video demo log** (milestone 7).
 - [ ] **18. Talk to the room mid-debate.** Router supports it; the page only allows it after the review ends.
-- [ ] **19. Re-run a failed round from the page.** Ledgerline's verdicts had to be re-run with a script.
+- [x] **19. Re-run a failed round from the page.** Ledgerline's verdicts had to be re-run with a script.
 - [ ] **20. More personas:** investor, security reviewer, developer panel.
-- [ ] **21. Shareable report.** Export a finished review as a page or PDF.
+- [x] **21. Shareable report.** Export a finished review as a page or PDF.
 - [ ] **22. Compare runs.** Review again after fixes and show which verdicts moved.
 
 ## 5. Cost and models

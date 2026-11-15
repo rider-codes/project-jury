@@ -105,3 +105,17 @@ def test_verify_keeps_only_passing_claims():
     out = verify("senior_engineer", v, BRIEF)
     assert len(out.verdict.reasons) == 1
     assert len(out.rejected) == 1
+
+
+def test_builder_answer_can_be_cited_by_question_id():
+    answers = {"q2": "It is for people who live in the terminal. About 40 people use it weekly."}
+    assert check_claim(claim("answer", "q2", "About 40 people use it weekly"), BRIEF, answers).ok
+    assert check_claim(claim("answer", "[Q2]", "live in the terminal"), BRIEF, answers).ok
+    invented = check_claim(claim("answer", "q2", "thousands of users"), BRIEF, answers)
+    assert not invented.ok and "quote not found" in invented.problem
+
+
+def test_answer_evidence_needs_an_actual_answer():
+    skipped = check_claim(claim("answer", "q1", "anything at all"), BRIEF, {"q2": "an answer"})
+    assert not skipped.ok and "no answer" in skipped.problem
+    assert not check_claim(claim("answer", "q2", "an answer"), BRIEF).ok  # round 1: nothing was asked yet

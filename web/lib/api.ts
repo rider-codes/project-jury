@@ -38,6 +38,7 @@ export const api = {
   startReview: (body: { repo_url?: string; site_url?: string; demo?: string; sample?: boolean; persona_ids: string[] }) =>
     post<{ id: string }>("/api/reviews", body),
   answer: (id: string, answers: Record<string, string>) => post<{ ok: true }>(`/api/reviews/${id}/answers`, { answers }),
+  retry: (id: string) => post<{ impressions: string[]; verdicts: string[]; summary: boolean }>(`/api/reviews/${id}/retry`, {}),
   startChat: (body: { persona_id: string; review_id?: string; with_history?: boolean; sample?: boolean }) =>
     post<Chat>("/api/chats", body),
   chat: (id: string) => call<Chat>(`/api/chats/${id}`),

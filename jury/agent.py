@@ -100,6 +100,8 @@ async def debate_turn(
     stance: str,
     others: dict[str, str],  # persona_id -> name
     user_message: str | None = None,
+    contrarian: bool = False,
+    answers: dict[str, str] | None = None,  # the builder's answers by question id, citable as evidence
 ) -> tuple[DebateTurn, list[ClaimCheck]]:
     """Round 2: one turn on the persona's own tier. Claims are verified like any other."""
     um = f"\nThe builder said to the room: <user_message>{user_message}</user_message>\nRespond to it.\n" if user_message else ""
@@ -107,14 +109,14 @@ async def debate_turn(
         stance=stance,
         verdict_question=persona.verdict_question,
         others=_bullets([f"{pid}: {name}" for pid, name in others.items()]),
-        user_message=um,
+        user_message=um + (_prompt("contrarian.md") if contrarian else ""),
     )
     messages = base_messages(persona, brief) + [
         {"role": "user", "content": context},
         {"role": "user", "content": prompt},
     ]
     turn = await ask_structured(llm, persona.model, messages, DebateTurn, persona.id)
-    kept, rejected = verify_claims(turn.claims, brief)
+    kept, rejected = verify_claims(turn.claims, brief, answers)
     challenges = [c for c in dict.fromkeys(turn.challenges) if c in others]
     return turn.model_copy(update={"claims": kept, "challenges": challenges}), rejected
 
@@ -141,7 +143,8 @@ async def chat_reply(
 
 
 async def final_verdict(
-    llm: JsonModel, persona: Persona, brief: Brief, max_attempts: int = 2, context: str = ""
+    llm: JsonModel, persona: Persona, brief: Brief, max_attempts: int = 2, context: str = "",
+    answers: dict[str, str] | None = None,
 ) -> VerifiedVerdict:
     messages = base_messages(persona, brief)
     if context:
@@ -150,4 +153,4 @@ async def final_verdict(
         {"role": "user", "content": _prompt("verdict.md").format(verdict_question=persona.verdict_question)}
     )
     verdict = await ask_structured(llm, persona.model, messages, Verdict, persona.id, max_attempts)
-    return verify(persona.id, verdict, brief)
+    return verify(persona.id, verdict, brief, answers)

@@ -12,7 +12,7 @@ export type Persona = {
 
 export type Claim = {
   text: string;
-  evidence: { kind: "file" | "demo" | "tree" | "site"; ref: string; quote: string };
+  evidence: { kind: "file" | "demo" | "tree" | "site" | "answer"; ref: string; quote: string };
 };
 
 export type Rejected = { text: string; problem: string };
@@ -39,6 +39,7 @@ export type Turn = {
   new_point: boolean;
   challenges: string[];
   open_question: string | null;
+  contrarian?: boolean; // the room agreed, so the moderator asked this reviewer to argue the other side
   error?: string;
 };
 
@@ -60,6 +61,7 @@ export type Summary = {
   top_changes: string[];
   tally: Record<Stance, number>;
   generated_by: "model" | "code";
+  error?: string; // the moderator's model call failed, so this is only the tally
 };
 
 export type ReviewEvent = { type: string; [key: string]: unknown };

@@ -238,3 +238,16 @@ def test_summary_falls_back_to_code_when_model_fails():
     assert values["summary"]["generated_by"] == "code"
     assert values["summary"]["headline"] == "1 useful"
     assert events[-1]["type"] == "done"
+
+
+def test_transcript_shows_question_ids_and_answers_are_keyed_by_them():
+    from jury.room.context import render
+    from jury.room.state import builder_answers
+
+    state = {"persona_ids": [], "qa_log": [
+        {"id": "q1", "text": "Who is it for?", "asked_by": [], "answer": "Terminal users."},
+        {"id": "d3", "text": "Is it deployed?", "asked_by": [], "answer": ""},
+    ]}
+    text = render(state, {})
+    assert "[q1] Who is it for?" in text and "[d3] Is it deployed?" in text
+    assert builder_answers(state) == {"q1": "Terminal users."}  # the skipped one cannot be cited

@@ -25,7 +25,7 @@ A panel of AI personas that review a software project and say whether it is usef
    - Demo v1: a written walkthrough plus screenshots.
    - Demo v2 (later): send the video to Gemini once and store a timestamped demo log (what is on screen, what is said). Agents cite the log, never the raw video.
 2. **Agents**: one engine, many system prompts. Output is structured only:
-   - `claims: [{text, evidence: {kind: file | demo, ref, quote}}]`
+   - `claims: [{text, evidence: {kind: file | demo | tree | site | answer, ref, quote}}]` (`answer` cites what the builder told the room, by question id)
    - `questions: []`, `stance`, `new_point`, `challenges: [persona]`, `open_question`
    - Tools: `read_file` and `search_repo`, used only in debate, 1 to 2 calls per turn. There is no `ask_user` tool.
 3. **Verifier node (code, no model)**: for each claim, check the file exists and the quote appears in it, or the demo reference exists. Drop or flag claims that fail.
@@ -66,8 +66,10 @@ Personas are just prompts in `personas/*.yaml`. Each file has `cares_about`, `ru
 - Pick the speaker whose view is most challenged (most `challenges` against them since they last spoke, then most disagreement with their stance).
 - Everyone speaks once before anyone speaks twice. Nobody speaks twice in a row; if only the last speaker has turns left, the debate ends.
 - Agents that failed round 1 sit out the debate and verdicts.
+- When every reviewer holds the same stance and nobody has been challenged, the next speaker is asked once to argue the other side (evidence rules still apply).
 - Route to the user when an agent has an `open_question`: at most 2 times per debate, and never a question the user was already asked (even if they skipped it).
 - A message from the user ("To: Everyone" or one persona) becomes the next input; the addressed persona speaks next.
+- After a review ends, a retry runs again only what failed (reviewers who missed round 1, failed verdicts, a summary the model did not write) on a fresh budget.
 - Stop at the first of: hard cap (2 to 3 turns per agent, about 8 to 12 turns total), or no new points and no stance changes in a full round.
 
 ## Cost

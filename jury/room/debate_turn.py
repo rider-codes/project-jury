@@ -3,7 +3,7 @@
 from jury.agent import JsonModel, debate_turn
 from jury.models import Brief, Persona
 from jury.room.context import render
-from jury.room.state import RoomState, active_personas, current_stances
+from jury.room.state import RoomState, active_personas, builder_answers, current_stances
 
 NODE = "debate_turn"
 
@@ -15,13 +15,15 @@ def make_node(llm: JsonModel, personas: dict[str, Persona]):
         um = state.get("user_message")
         addressed = bool(um) and um.get("to") in (pid, "everyone")
         others = {p: personas[p].name for p in active_personas(state) if p != pid}
-        base = {"speaker": pid, "addressed_by_user": addressed}
+        contrarian = bool(state["next_action"].get("contrarian"))
+        base = {"speaker": pid, "addressed_by_user": addressed, "contrarian": contrarian}
         update: dict = {"user_message": None} if addressed else {}
 
         try:
             turn, rejected = await debate_turn(
                 llm, personas[pid], Brief.model_validate(state["brief"]), render(state, personas),
-                before, others, um["text"] if addressed else None,
+                before, others, um["text"] if addressed else None, contrarian=contrarian,
+                answers=builder_answers(state),
             )
         except Exception as e:  # a failed turn still counts, so the debate cannot loop
             update["turns"] = [{**base, "error": f"{type(e).__name__}: {e}"[:500], "message": "", "claims": [],

@@ -45,12 +45,18 @@ class VerdictTask(TypedDict):
     persona_id: str
     brief: dict
     context: str  # rendered room transcript
+    answers: dict[str, str]  # the builder's answers by question id
 
 
 def active_personas(state: RoomState) -> list[str]:
     """Personas that gave a round 1 impression. The ones that failed sit out."""
     imps = state.get("impressions") or {}
     return [p for p in state.get("persona_ids", []) if p in imps]
+
+
+def builder_answers(state: RoomState) -> dict[str, str]:
+    """Question id -> what the builder answered. Skipped questions are left out."""
+    return {q["id"]: q["answer"] for q in state.get("qa_log") or [] if q.get("answer")}
 
 
 def current_stances(state: RoomState) -> dict[str, str]:

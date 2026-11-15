@@ -17,6 +17,7 @@ from jury.ingest.site_log import add_site
 from jury.models import Persona
 from jury.room.events import stream_events
 from jury.room.graph import build_graph, initial_state
+from jury.room.retry import plan, redo
 
 
 class Busy(RuntimeError):
@@ -58,7 +59,43 @@ class Runner:
         self._spawn(review_id, self._start(review_id, persona_ids, brief, repo_url, demo_text, site_url))
 
     def resume(self, review_id: str, answers: dict[str, str]) -> None:
-        self._spawn(review_id, self._run(review_id, Command(resume=answers), resumed=True))
+        # an empty dict is falsy, and LangGraph then pauses again instead of resuming
+        self._spawn(review_id, self._run(review_id, Command(resume=answers or {"": ""}), resumed=True))
+
+    async def retry_plan(self, review_id: str) -> dict | None:
+        """What a retry would run again, or None when there is nothing to go on
+        (the project was never read) or the review is waiting for answers."""
+        config = {"configurable": {"thread_id": review_id}}
+        async with AsyncSqliteSaver.from_conn_string(self.db_path) as saver:
+            snap = await build_graph(self._llm(review_id), self.personas, saver).aget_state(config)
+        if not snap.values.get("brief") or any(t.interrupts for t in snap.tasks):
+            return None
+        return {**plan(snap.values), "resume": bool(snap.next)}
+
+    def retry(self, review_id: str) -> None:
+        self._spawn(review_id, self._retry(review_id))
+
+    async def _retry(self, review_id: str) -> None:
+        # the user asked for another go, so it gets a fresh budget
+        self.llms.pop(review_id, None)
+        llm = self._llm(review_id)
+        self.store.add_event(review_id, {"type": "resumed", "retry": True})
+        config = {"configurable": {"thread_id": review_id}}
+        try:
+            async with AsyncSqliteSaver.from_conn_string(self.db_path) as saver:
+                graph = build_graph(llm, self.personas, saver)
+                if (await graph.aget_state(config)).next:
+                    # the run died partway: carry on from the last checkpoint
+                    events = stream_events(graph, None, config)
+                else:
+                    events = redo(graph, config, llm, self.personas)
+                async for event in events:
+                    self.store.add_event(review_id, event)
+        except Exception as e:
+            self.store.add_event(review_id, {"type": "error", "message": f"{type(e).__name__}: {e}"[:500]})
+        budget = getattr(llm, "budget", None)
+        if budget is not None:
+            self.store.add_event(review_id, {"type": "usage", "calls": budget.calls, "tokens": budget.tokens})
 
     async def _start(self, review_id, persona_ids, brief, repo_url, demo_text, site_url="") -> None:
         try:

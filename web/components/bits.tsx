@@ -31,7 +31,7 @@ export function Claims({ claims, rejected = [], limit, brief }: { claims: Claim[
               <>repo tree · {c.evidence.ref === "absent" ? "no file matching" : "has"} {c.evidence.quote}</>
             ) : (
               <>
-                {c.evidence.kind === "demo" ? "demo " : c.evidence.kind === "site" ? "live site " : ""}
+                {c.evidence.kind === "demo" ? "demo " : c.evidence.kind === "site" ? "live site " : c.evidence.kind === "answer" ? "the builder said, " : ""}
                 {c.evidence.ref} · &ldquo;{c.evidence.quote.length > cut ? c.evidence.quote.slice(0, cut) + "…" : c.evidence.quote}&rdquo;
               </>
             )}

@@ -27,7 +27,7 @@ def render(state: RoomState, personas: dict[str, Persona]) -> str:
     if qa:
         lines.append("\nQuestions to the builder and their answers:")
         for q in qa:
-            lines.append(f"- {q['text']} (asked by {', '.join(name(p) for p in q['asked_by'])})")
+            lines.append(f"- [{q['id']}] {q['text']} (asked by {', '.join(name(p) for p in q['asked_by'])})")
             lines.append(f"    answer: {q['answer'] or '(skipped, no answer)'}")
 
     turns = state.get("turns") or []

@@ -164,3 +164,9 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; }
   .note { padding-left: 0; }
   .drawer { inset: 0 auto 0 56px; }
 }
+
+/* retry what failed, the devil's-advocate tag, report buttons */
+.retry { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; border: 1px solid var(--ask); background: var(--ask-bg); border-radius: 18px; padding: 18px 22px; }
+.retry > div { flex: 1 1 280px; min-width: 0; }
+.devil { margin-left: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ask); border: 1px solid currentColor; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.report-actions { margin-top: 18px; flex-wrap: wrap; gap: 12px; }

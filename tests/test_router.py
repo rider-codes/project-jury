@@ -171,3 +171,18 @@ def test_every_run_ends_within_the_cap():
             turns.append(turn(d.speaker, others[:1]))
         assert d.action == "end"
         assert len(turns) <= Caps().total_for(n)
+
+
+def test_unanimous_room_gets_one_devils_advocate():
+    d = decide(ROOM, AGREE, [], set())
+    assert d.contrarian and "argue the other side" in d.reason
+    # once someone has been nudged, nobody else is
+    nudged = {**turn("senior_engineer"), "contrarian": True}
+    assert not decide(ROOM, AGREE, [nudged], set()).contrarian
+
+
+def test_no_devils_advocate_when_the_room_already_disagrees():
+    assert not decide(ROOM, {**AGREE, "ux_designer": "useful"}, [], set()).contrarian
+    # same stances, but a challenge was already made
+    assert not decide(ROOM, AGREE, [turn("senior_engineer", challenges=["ux_designer"])], set()).contrarian
+    assert not decide(["senior_engineer"], {"senior_engineer": "unsure"}, [], set()).contrarian

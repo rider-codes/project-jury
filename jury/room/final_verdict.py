@@ -12,7 +12,8 @@ def make_node(llm: JsonModel, personas: dict[str, Persona]):
         pid = task["persona_id"]
         try:
             result = await final_verdict(
-                llm, personas[pid], Brief.model_validate(task["brief"]), context=task["context"]
+                llm, personas[pid], Brief.model_validate(task["brief"]), context=task["context"],
+                answers=task.get("answers"),
             )
         except Exception as e:
             return {"verdict_failures": {pid: f"{type(e).__name__}: {e}"[:500]}}

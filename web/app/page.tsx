@@ -40,6 +40,7 @@ export default function Home() {
   const [barText, setBarText] = useState("");
   const [barBusy, setBarBusy] = useState(false);
   const [quota, setQuota] = useState<Quota | null>(null);
+  const [streamRun, setStreamRun] = useState(0); // bumped to reopen the event stream after a retry
 
   // ?view=home: the public dashboard, reachable from the app's Home button
   const [home, setHome] = useState(false);
@@ -80,7 +81,7 @@ export default function Home() {
     es.onmessage = (m) => dispatch({ type: "event", event: JSON.parse(m.data) });
     es.addEventListener("end", () => es.close());
     return () => es.close();
-  }, [reviewId]);
+  }, [reviewId, streamRun]);
 
   useEffect(() => {
     setUrl({ chat: chat?.id ?? null });
@@ -130,6 +131,12 @@ export default function Home() {
 
   const answer = useCallback(async (answers: Record<string, string>) => {
     if (reviewId) await api.answer(reviewId, answers);
+  }, [reviewId]);
+
+  const retry = useCallback(async () => {
+    if (!reviewId) return;
+    await api.retry(reviewId);
+    setStreamRun((n) => n + 1); // the old stream closed when the review ended
   }, [reviewId]);
 
   // message bar: after the review, talk to one reviewer with the room's history
@@ -272,7 +279,7 @@ export default function Home() {
                 </form>
               )}
 
-              <RoomView room={room} names={names} personas={personas} onAnswer={answer} />
+              <RoomView room={room} names={names} personas={personas} onAnswer={answer} onRetry={retry} />
 
               {started && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

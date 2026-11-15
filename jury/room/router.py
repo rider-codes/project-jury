@@ -22,7 +22,7 @@ from langgraph.types import Send
 
 from jury.models import RouterDecision
 from jury.room.dedupe import _tokens, contained
-from jury.room.state import RoomState, VerdictTask, active_personas, current_stances
+from jury.room.state import RoomState, VerdictTask, active_personas, builder_answers, current_stances
 
 NODE = "debate_router"
 
@@ -82,6 +82,9 @@ def decide(
     if to in eligible:
         return RouterDecision(action="speak", speaker=to, reason="the user addressed them")
 
+    # a room that agrees from the start never tests its view: one reviewer argues the other side, once
+    nudge = unanimous(active, stances, turns)
+
     last = turns[-1]["speaker"] if turns else None
     candidates = [p for p in eligible if p != last]
     if not candidates:  # only the last speaker has turns left; they would be answering themselves
@@ -103,6 +106,9 @@ def decide(
 
     best = max(candidates, key=score)
     c, d = challenged_since_spoke(best), disagreement(best)
+    if nudge:
+        return RouterDecision(action="speak", speaker=best, contrarian=True,
+                              reason="everyone agrees, so they argue the other side")
     if c:
         reason = f"most challenged ({c} challenge{'s' if c > 1 else ''} since they last spoke)"
     elif d:
@@ -110,6 +116,13 @@ def decide(
     else:
         reason = "has spoken least"
     return RouterDecision(action="speak", speaker=best, reason=reason)
+
+
+def unanimous(active: list[str], stances: dict[str, str], turns: list[dict]) -> bool:
+    """Two or more reviewers, one shared stance, no challenge made yet, and nobody nudged before."""
+    if len(active) < 2 or len({stances.get(p) for p in active}) != 1:
+        return False
+    return not any(t.get("contrarian") or t.get("challenges") for t in turns)
 
 
 def is_repeat(question: str, asked_texts) -> bool:
@@ -167,4 +180,6 @@ def route(state: RoomState, render_context) -> str | list[Send]:
     if not active:
         return "summary"
     context = render_context(state)
-    return [Send("final_verdict", VerdictTask(persona_id=p, brief=state["brief"], context=context)) for p in active]
+    answers = builder_answers(state)
+    return [Send("final_verdict", VerdictTask(persona_id=p, brief=state["brief"], context=context, answers=answers))
+            for p in active]

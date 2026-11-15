@@ -23,6 +23,7 @@ export type RoomState = {
   round: 0 | 1 | 2 | 3;
   error: string | null;
   usage: { calls: number; tokens: number } | null;
+  usageBefore: { calls: number; tokens: number } | null; // spent before a retry, which starts a fresh count
 };
 
 export const emptyRoom: RoomState = {
@@ -42,6 +43,7 @@ export const emptyRoom: RoomState = {
   round: 0,
   error: null,
   usage: null,
+  usageBefore: null,
 };
 
 export type Action = { type: "reset"; personaIds?: string[] } | { type: "event"; event: ReviewEvent };
@@ -87,8 +89,13 @@ export function roomReducer(s: RoomState, action: Action): RoomState {
     }
     case "paused":
       return { ...s, status: "paused" };
-    case "resumed":
-      return { ...s, status: "running" };
+    case "resumed": {
+      if (!e.retry) return { ...s, status: "running" };
+      // a retry: whoever has no verdict yet is being asked again
+      const done = new Set(s.verdicts.map((v) => v.persona_id));
+      return { ...s, status: "running", error: null, usageBefore: s.usage,
+               personaState: Object.fromEntries(s.personaIds.map((p) => [p, done.has(p) ? s.personaState[p] : "thinking" as const])) };
+    }
     case "answers_received": {
       const answers: Record<string, string> = e.answers ?? {};
       const answered = (s.pending ?? []).map((q) => ({ question: q, answer: answers[q.id] ?? "" }));
@@ -134,7 +141,7 @@ export function roomReducer(s: RoomState, action: Action): RoomState {
     case "error":
       return { ...s, status: "error", error: e.message };
     case "usage":
-      return { ...s, usage: { calls: e.calls, tokens: e.tokens } };
+      return { ...s, usage: { calls: e.calls + (s.usageBefore?.calls ?? 0), tokens: e.tokens + (s.usageBefore?.tokens ?? 0) } };
     default:
       return s;
   }

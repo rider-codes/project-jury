@@ -1,0 +1,2 @@
+
+Every reviewer in the room holds the same stance and nobody has been challenged, so this turn you argue the other side. Make the strongest evidence-backed case against the room's shared stance: what did everyone miss or wave through? Name at least one reviewer in "challenges". The evidence rules still apply, so do not invent a weakness or a strength. If the evidence gives no real counter-case, say so in one sentence and name the biggest thing the room has not tested. Keep your own stance unless the evidence moves you.

@@ -77,7 +77,8 @@ def _path(ref: str) -> str:
     return ref.lstrip("/")
 
 
-def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
+def check_claim(claim: Claim, brief: Brief, answers: dict[str, str] | None = None) -> ClaimCheck:
+    """answers: what the builder told the room, by question id. Without them, `answer` evidence fails."""
     ev = claim.evidence
     quote = _norm(ev.quote)
     if len(quote) < MIN_QUOTE_CHARS:
@@ -85,7 +86,11 @@ def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
 
     if ev.kind == "tree":
         return _check_tree(claim, brief)
-    if ev.kind == "site":
+    if ev.kind == "answer":
+        source = (answers or {}).get(ev.ref.strip().lower().strip("[]"))
+        if not source:
+            return ClaimCheck(claim=claim, ok=False, problem=f"the builder gave no answer to: {ev.ref}")
+    elif ev.kind == "site":
         source = site_source(brief, ev.ref)
         if source is None:
             return ClaimCheck(claim=claim, ok=False, problem=f"site page not captured: {ev.ref}")
@@ -104,8 +109,10 @@ def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
     return ClaimCheck(claim=claim, ok=True)
 
 
-def verify_claims(claims: list[Claim], brief: Brief) -> tuple[list[Claim], list[ClaimCheck]]:
-    checks = [check_claim(c, brief) for c in claims]
+def verify_claims(
+    claims: list[Claim], brief: Brief, answers: dict[str, str] | None = None
+) -> tuple[list[Claim], list[ClaimCheck]]:
+    checks = [check_claim(c, brief, answers) for c in claims]
     kept, seen = [], set()
     for c in checks:
         if not c.ok:
@@ -119,8 +126,8 @@ def verify_claims(claims: list[Claim], brief: Brief) -> tuple[list[Claim], list[
     return kept, [c for c in checks if not c.ok]
 
 
-def verify(persona_id: str, verdict: Verdict, brief: Brief) -> VerifiedVerdict:
-    kept, rejected = verify_claims(verdict.reasons, brief)
+def verify(persona_id: str, verdict: Verdict, brief: Brief, answers: dict[str, str] | None = None) -> VerifiedVerdict:
+    kept, rejected = verify_claims(verdict.reasons, brief, answers)
     return VerifiedVerdict(
         persona_id=persona_id,
         verdict=verdict.model_copy(update={"reasons": kept}),

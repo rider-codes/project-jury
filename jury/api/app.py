@@ -6,6 +6,7 @@ GET  /api/reviews                  past reviews
 GET  /api/reviews/{id}             one review and its status
 GET  /api/reviews/{id}/events      Server-Sent Events, replayable (Last-Event-ID or ?after=)
 POST /api/reviews/{id}/answers     answer the open questions and resume
+POST /api/reviews/{id}/retry       run again only what failed (reviewers, verdicts, summary)
 POST /api/chats                    start a one-on-one chat (clean, or with the room's history)
 GET  /api/chats/{id}
 POST /api/chats/{id}/messages      send one message, get the persona's reply
@@ -34,6 +35,7 @@ from jury.chat.session import ChatSession
 from jury.chat.store import ChatStore
 from jury.ingest.site_log import vision_calls
 from jury.personas import load_all
+from jury.room.retry import needed
 from jury.room.state import DEFAULT_ROOM
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -189,13 +191,13 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         async def stream():
             nonlocal last
             idle = 0
+            finished = False  # kept across polls; a retry ("resumed") reopens a finished review
             while not await request.is_disconnected():
                 rows = store.events_after(review_id, last)
-                finished = False
                 for seq, event in rows:
                     last = seq
                     yield f"id: {seq}\ndata: {json.dumps(event)}\n\n"
-                    finished = finished or event["type"] in TERMINAL
+                    finished = event["type"] in TERMINAL or (finished and event["type"] != "resumed")
                 if finished and not runner.is_running(review_id):
                     # let the trailing usage event through, then close
                     for seq, event in store.events_after(review_id, last):
@@ -221,6 +223,21 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         except Busy as e:
             raise HTTPException(409, str(e))
         return {"ok": True}
+
+    @app.post("/api/reviews/{review_id}/retry", status_code=202)
+    async def retry(review_id: str):
+        review_or_404(review_id)
+        if runner.is_running(review_id):
+            raise HTTPException(409, "this review is still running")
+        if store.status(review_id) == "paused":
+            raise HTTPException(409, "this review is waiting for your answers")
+        todo = await runner.retry_plan(review_id)
+        if todo is None:
+            raise HTTPException(409, "the project was never read, so start a new review instead")
+        if not (todo["resume"] or needed(todo)):
+            raise HTTPException(409, "nothing failed in this review")
+        runner.retry(review_id)
+        return todo
 
     @app.post("/api/chats", status_code=201)
     async def new_chat(body: NewChat):

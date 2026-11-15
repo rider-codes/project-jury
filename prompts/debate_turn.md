@@ -17,7 +17,7 @@ Reply with ONLY a JSON object of this shape:
 {{
   "message": "3 to 5 sentences, said to the room",
   "claims": [
-    {{"text": "point", "evidence": {{"kind": "file" | "demo" | "tree" | "site", "ref": "path, step-ref, present/absent, or site page ref", "quote": "exact text copied from it"}}}}
+    {{"text": "point", "evidence": {{"kind": "file" | "demo" | "tree" | "site" | "answer", "ref": "path, step-ref, present/absent, site page ref, or question id", "quote": "exact text copied from it"}}}}
   ],
   "stance": "useful" | "unsure" | "not useful",
   "stance_change_reason": null,

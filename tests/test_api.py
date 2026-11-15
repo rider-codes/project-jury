@@ -189,3 +189,70 @@ def test_chat_clean_and_with_room_history(client):
     assert client.post("/api/chats", json={"persona_id": "nobody", "sample": True}).status_code == 422
     assert client.post("/api/chats/nope/messages", json={"text": "hi"}).status_code == 404
     assert client.post(f"/api/chats/{clean['id']}/messages", json={"text": ""}).status_code == 422
+
+
+def test_retry_runs_again_only_what_failed(tmp_path):
+    down = {"verdicts": True}
+
+    class Flaky(DemoLLM):
+        async def complete_json(self, tier, messages, vision=False):
+            if down["verdicts"] and "Give your final verdict" in messages[-1]["content"]:
+                raise RuntimeError("model down")
+            return await super().complete_json(tier, messages, vision)
+
+    app = create_app(str(tmp_path / "j.sqlite"), lambda: Flaky(delay=0))
+    with TestClient(app) as c:
+        ids = ["senior_engineer", "ux_designer"]
+        rid = c.post("/api/reviews", json={"sample": True, "persona_ids": ids}).json()["id"]
+        assert run_to_done(c, rid) == "done"
+        before = client_events(c, rid)
+        assert not [e for e in before if e["type"] == "verdict"]
+        assert len([e for e in before if e["type"] == "agent_error" and e.get("phase") == "verdict"]) == 2
+
+        down["verdicts"] = False
+        r = c.post(f"/api/reviews/{rid}/retry")
+        assert r.status_code == 202 and r.json()["verdicts"] == ids and r.json()["impressions"] == []
+        assert wait_for(c, rid, {"done", "error"}) == "done"
+        after = client_events(c, rid)[len(before):]
+        types = [e["type"] for e in after]
+        assert types[0] == "resumed" and types.count("verdict") == 2
+        assert "impression" not in types and "debate_turn" not in types  # nothing that worked is redone
+        summary = [e for e in after if e["type"] == "summary"][-1]
+        assert sum(summary["tally"].values()) == 2
+
+        # the stream of a retried review replays everything and still ends
+        events, _ = sse(c, rid)
+        assert [e["type"] for e in events].count("done") == 2
+
+        assert c.post(f"/api/reviews/{rid}/retry").status_code == 409  # nothing left to fix
+        assert c.post("/api/reviews/nope/retry").status_code == 404
+
+
+def test_retry_brings_back_a_reviewer_who_missed_round_one(tmp_path):
+    down = {"on": True}
+
+    class Flaky(DemoLLM):
+        async def complete_json(self, tier, messages, vision=False):
+            if down["on"] and "designer" in messages[0]["content"].lower()[:400] and "first impression" in messages[-1]["content"]:
+                raise RuntimeError("model down")
+            return await super().complete_json(tier, messages, vision)
+
+    app = create_app(str(tmp_path / "j.sqlite"), lambda: Flaky(delay=0))
+    with TestClient(app) as c:
+        rid = c.post("/api/reviews", json={"sample": True, "persona_ids": ["senior_engineer", "ux_designer"]}).json()["id"]
+        assert run_to_done(c, rid) == "done"
+        before = client_events(c, rid)
+        if not any(e["type"] == "agent_error" and e["persona_id"] == "ux_designer" for e in before):
+            raise AssertionError("the test double no longer fails the designer in round 1")
+        down["on"] = False
+        assert c.post(f"/api/reviews/{rid}/retry").json()["impressions"] == ["ux_designer"]
+        assert wait_for(c, rid, {"done", "error"}) == "done"
+        after = client_events(c, rid)[len(before):]
+        assert [e["persona_id"] for e in after if e["type"] == "impression"] == ["ux_designer"]
+        assert [e["persona_id"] for e in after if e["type"] == "verdict"] == ["ux_designer"]
+
+
+def test_retry_refused_when_the_project_was_never_read(client):
+    rid = client.post("/api/reviews", json={"repo_url": "https://github.com/o/broken"}).json()["id"]
+    assert wait_for(client, rid, {"error"}) == "error"
+    assert client.post(f"/api/reviews/{rid}/retry").status_code == 409

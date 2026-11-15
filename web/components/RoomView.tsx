@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { RoomState } from "@/lib/room";
 import type { Persona } from "@/lib/types";
+import { download, fileName, reportHtml, reportMarkdown } from "@/lib/report";
 import { Avatar, Claims, StanceBadge, accentStyle } from "./bits";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
   names: Record<string, string>;
   personas: Persona[];
   onAnswer: (answers: Record<string, string>) => Promise<void>;
+  onRetry?: () => Promise<void>; // run again only what failed
   readOnly?: boolean; // the public replay: questions are shown, not answered
   compact?: boolean; // the public replay: one claim per card, short debate turns
 };
@@ -20,9 +22,14 @@ function short(text: string): string {
   return parts && parts.length > 1 ? parts.slice(0, 1).join("").trim() : text;
 }
 
-export function RoomView({ room, names, onAnswer, readOnly, compact }: Props) {
+export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: Props) {
   const limit = compact ? 1 : undefined;
   const name = (id: string) => names[id] ?? id;
+  // what a retry would run: reviewers with no verdict, or a summary the moderator could not write
+  const over = room.status === "done" || room.status === "error";
+  const unfinished = room.personaIds.filter((p) => !room.verdicts.some((v) => v.persona_id === p));
+  const canRetry = !readOnly && !!onRetry && !!room.project && over &&
+    (unfinished.length > 0 || !!room.summary?.error || room.status === "error");
   const questionCard = room.pending && room.status !== "done" ? (
     <QuestionCard key={room.pending.map((q) => q.id).join()} questions={room.pending} names={names}
                   onAnswer={onAnswer} ready={room.status === "paused"} readOnly={readOnly} />
@@ -97,6 +104,7 @@ export function RoomView({ room, names, onAnswer, readOnly, compact }: Props) {
                 <Avatar id={item.turn.speaker} />
                 <div className="bubble">
                   <span className="name">{name(item.turn.speaker)}</span>
+                  {item.turn.contrarian && !item.turn.error && <span className="devil">arguing the other side</span>}
                   {item.turn.error ? (
                     <div className="msg muted">Could not respond this turn.</div>
                   ) : (
@@ -151,6 +159,11 @@ export function RoomView({ room, names, onAnswer, readOnly, compact }: Props) {
         </section>
       )}
 
+      {canRetry && (
+        <RetryCard onRetry={onRetry!} stopped={room.status === "error" ? room.error : null}
+                   who={unfinished.map(name)} summaryOnly={!unfinished.length && !!room.summary?.error} />
+      )}
+
       {room.status !== "idle" && (
         <section className={`summary ${room.summary ? "ready" : ""}`} aria-labelledby="sum">
           <h2 id="sum">Final summary</h2>
@@ -178,6 +191,7 @@ export function RoomView({ room, names, onAnswer, readOnly, compact }: Props) {
               {room.usage && (
                 <div className="evidence">{room.usage.calls} model calls · {room.usage.tokens.toLocaleString()} tokens</div>
               )}
+              {!readOnly && room.status === "done" && room.project && <ReportButtons room={room} names={names} />}
             </>
           ) : room.status === "error" ? (
             <div className="form-error">The review stopped: {room.error}</div>
@@ -189,6 +203,66 @@ export function RoomView({ room, names, onAnswer, readOnly, compact }: Props) {
         </section>
       )}
     </>
+  );
+}
+
+function RetryCard({ onRetry, who, stopped, summaryOnly }: {
+  onRetry: () => Promise<void>;
+  who: string[];
+  stopped: string | null;
+  summaryOnly: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onRetry();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+  const what = stopped
+    ? "The review stopped before it finished."
+    : summaryOnly
+      ? "The moderator could not write the summary, so only the tally is shown."
+      : `${who.join(", ")} did not give a verdict.`;
+  return (
+    <section className="retry" aria-labelledby="retry-title">
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span id="retry-title" style={{ fontSize: 16, fontWeight: 800 }}>{what}</span>
+        <span className="muted" style={{ fontSize: 13 }}>
+          Run again only what failed. Everything that worked is kept
+          {who.length ? `, and it takes up to ${2 * who.length + 1} model requests.` : "."}
+        </span>
+        {error && <div className="form-error">{error}</div>}
+      </div>
+      <button type="button" className="btn" onClick={run} disabled={busy}>{busy ? "Starting…" : "Try again"}</button>
+    </section>
+  );
+}
+
+function ReportButtons({ room, names }: { room: RoomState; names: Record<string, string> }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(reportMarkdown(room, names));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      download(fileName(room, "md"), reportMarkdown(room, names), "text/markdown");
+    }
+  };
+  return (
+    <div className="row report-actions">
+      <button type="button" className="btn" onClick={() => download(fileName(room, "html"), reportHtml(room, names), "text/html")}>
+        Download report
+      </button>
+      <button type="button" className="btn ghost" onClick={copy} aria-live="polite">{copied ? "Copied" : "Copy as Markdown"}</button>
+      <span className="muted" style={{ fontSize: 13 }}>One file you can send, or print to PDF.</span>
+    </div>
   );
 }
 

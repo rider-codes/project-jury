@@ -273,7 +273,7 @@ def test_site_evidence_without_a_site():
 
 def test_prompts_offer_site_evidence():
     rules = _prompt("rules.md")
-    assert "four kinds" in rules and "`site`" in rules and "page-1-desktop" in rules
+    assert "`answer`" in rules and "`site`" in rules and "page-1-desktop" in rules
     for name in ["first_impression.md", "verdict.md", "debate_turn.md", "chat_turn.md"]:
         assert '"file" | "demo" | "tree" | "site"' in _prompt(name), name
 

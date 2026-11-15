@@ -73,7 +73,8 @@ class Brief(BaseModel):
 
 
 class Evidence(BaseModel):
-    kind: Literal["file", "demo", "tree", "site"]
+    kind: Literal["file", "demo", "tree", "site", "answer"]
+    # answer: the id of a question the builder answered (e.g. "q2"); the quote is from their answer.
     # file: a file path. demo: a demo step ref. tree: "present" or "absent".
     # site: a site view ref such as "page-1-desktop" (or "page-1" for either width).
     ref: str
@@ -142,6 +143,7 @@ class RouterDecision(BaseModel):
     action: Literal["speak", "ask_user", "end"]
     speaker: str | None = None
     reason: str
+    contrarian: bool = False  # the room is unanimous and unchallenged: this speaker argues the other side
 
 
 class RoomSummary(BaseModel):
