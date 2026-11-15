@@ -320,3 +320,32 @@
 .sc-app .topbar .pill { padding: 0 14px; }
 /* review status: a small tag beside the project name, not a control in the top bar */
 .sc-app .sc-status { font-family: var(--mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+
+/* ---------- phone width: the app ---------- */
+@media (max-width: 720px) {
+  /* the rail becomes a bottom bar, so the page gets the full width */
+  .sc-app.shell { flex-direction: column; }
+  .sc-app .rail { position: fixed; inset: auto 0 0 0; height: auto; flex: none; flex-direction: row; justify-content: space-around;
+                  padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-right: none; border-top: 2px solid var(--edge); z-index: 20; }
+  .sc-app .rail-btn { width: 48px; height: 48px; }
+  .sc-app .main { padding: 16px 16px 104px; }
+  .sc-app .column { gap: 32px; }
+  .sc-app .drawer { inset: 0 0 66px 0; width: auto; border-right: none; }
+  .sc-app .topbar { gap: 10px; }
+  .sc-app .sc-logo { height: 36px; }
+  .sc-app .sc-status { white-space: normal; border-radius: 12px; }
+  .sc-app .toggle button { min-height: 44px; }
+  /* three reviewers per row instead of one or two */
+  .sc-app .personas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 10px; }
+  .sc-app .persona { width: auto; }
+  .sc-app .portrait { width: 100%; height: auto; aspect-ratio: 140 / 156; border-radius: 18px; }
+  .sc-app .portrait img { width: 100%; height: 100%; border-radius: 0 0 16px 16px; }
+  .sc-app .persona-name { font-size: 13px; }
+  .sc-app .persona-tag { font-size: 11.5px; }
+  .sc-app .grid > .card { flex-basis: 100%; }
+  .sc-app .turn { gap: 10px; }
+  .sc-app .turn .avatar { display: none; }
+  .sc-app .devil { margin-left: 0; align-self: flex-start; }
+  .sc-app .bar .select { flex: 1 1 auto; }
+  .sc-app .retry .btn, .sc-app .report-actions .btn { flex: 1 1 100%; }
+}

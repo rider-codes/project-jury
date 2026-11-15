@@ -1,0 +1,41 @@
+{
+ "project_name": "linkcheck",
+ "repo_url": "https://github.com/example/linkcheck",
+ "summary": "A command-line tool that finds broken links in Markdown files.",
+ "files": {
+  "README.md": "# linkcheck\n\nFind broken links in your Markdown files before your readers do.\n\n## Install\n\n    pip install linkcheck\n\n## Use\n\n    linkcheck docs/\n\nIt prints one line per broken link with the file, the line number and the HTTP status,\nand exits with code 1 if any link is broken, so you can run it in CI.\n\n## Limits\n\n- Only http and https links are checked. Relative links between files are not checked yet.\n- Sites that block bots can show up as broken. Skip them with `--ignore example.com`.\n\n## Contributing\n\nRun `pip install -e .[dev]` then `pytest`. See CONTRIBUTING.md.\n",
+  "linkcheck/cli.py": "import argparse\nimport sys\n\nfrom linkcheck.check import check_file, find_markdown\n\n\ndef main(argv=None) -> int:\n    parser = argparse.ArgumentParser(prog=\"linkcheck\", description=\"Find broken links in Markdown files.\")\n    parser.add_argument(\"path\", help=\"a Markdown file or a folder\")\n    parser.add_argument(\"--ignore\", action=\"append\", default=[], help=\"skip links to this host\")\n    parser.add_argument(\"--timeout\", type=float, default=10.0)\n    args = parser.parse_args(argv)\n\n    files = find_markdown(args.path)\n    if not files:\n        print(f\"No Markdown files found in {args.path}\", file=sys.stderr)\n        return 2\n    broken = 0\n    for f in files:\n        for problem in check_file(f, ignore=args.ignore, timeout=args.timeout):\n            print(f\"{f}:{problem.line}: {problem.url} ({problem.reason})\")\n            broken += 1\n    print(f\"Checked {len(files)} file(s), {broken} broken link(s).\")\n    return 1 if broken else 0\n",
+  "linkcheck/check.py": "import re\nfrom dataclasses import dataclass\nfrom pathlib import Path\nfrom urllib.parse import urlparse\n\nimport httpx\n\nLINK = re.compile(r\"\\[[^\\]]*\\]\\((https?://[^)\\s]+)\\)\")\n\n\n@dataclass\nclass Problem:\n    line: int\n    url: str\n    reason: str\n\n\ndef find_markdown(path: str) -> list[Path]:\n    p = Path(path)\n    if p.is_file():\n        return [p] if p.suffix == \".md\" else []\n    return sorted(p.rglob(\"*.md\"))\n\n\ndef check_file(path: Path, ignore: list[str], timeout: float) -> list[Problem]:\n    problems = []\n    with httpx.Client(timeout=timeout, follow_redirects=True) as client:\n        for n, text in enumerate(path.read_text(encoding=\"utf-8\").splitlines(), 1):\n            for url in LINK.findall(text):\n                if urlparse(url).hostname in ignore:\n                    continue\n                try:\n                    status = client.head(url).status_code\n                    if status >= 400:\n                        problems.append(Problem(n, url, f\"HTTP {status}\"))\n                except httpx.HTTPError as e:\n                    problems.append(Problem(n, url, type(e).__name__))\n    return problems\n",
+  "tests/test_check.py": "import httpx\nimport respx\n\nfrom linkcheck.check import check_file, find_markdown\n\n\n@respx.mock\ndef test_broken_link_is_reported_with_its_line(tmp_path):\n    respx.head(\"https://ok.example/\").mock(return_value=httpx.Response(200))\n    respx.head(\"https://gone.example/\").mock(return_value=httpx.Response(404))\n    f = tmp_path / \"a.md\"\n    f.write_text(\"[fine](https://ok.example/)\\n[dead](https://gone.example/)\\n\")\n    problems = check_file(f, ignore=[], timeout=1)\n    assert [(p.line, p.reason) for p in problems] == [(2, \"HTTP 404\")]\n\n\n@respx.mock\ndef test_ignored_hosts_are_skipped(tmp_path):\n    f = tmp_path / \"a.md\"\n    f.write_text(\"[dead](https://gone.example/)\\n\")\n    assert check_file(f, ignore=[\"gone.example\"], timeout=1) == []\n\n\ndef test_only_markdown_files_are_found(tmp_path):\n    (tmp_path / \"a.md\").write_text(\"x\")\n    (tmp_path / \"b.txt\").write_text(\"x\")\n    assert [p.name for p in find_markdown(str(tmp_path))] == [\"a.md\"]\n",
+  ".github/workflows/ci.yml": "name: CI\non: [push, pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        python: [\"3.10\", \"3.12\"]\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: ${{ matrix.python }}\n      - run: pip install -e .[dev]\n      - run: pytest -q\n",
+  "pyproject.toml": "[project]\nname = \"linkcheck\"\nversion = \"1.2.0\"\ndescription = \"Find broken links in Markdown files.\"\nrequires-python = \">=3.10\"\ndependencies = [\"httpx>=0.27\"]\n\n[project.optional-dependencies]\ndev = [\"pytest>=8\", \"respx>=0.21\"]\n\n[project.scripts]\nlinkcheck = \"linkcheck.cli:main\"\n"
+ },
+ "tree": [
+  "README.md",
+  "LICENSE",
+  "CONTRIBUTING.md",
+  "CHANGELOG.md",
+  "pyproject.toml",
+  ".github/workflows/ci.yml",
+  "linkcheck/__init__.py",
+  "linkcheck/cli.py",
+  "linkcheck/check.py",
+  "tests/test_check.py",
+  "tests/test_cli.py"
+ ],
+ "demo": [
+  {
+   "ref": "step-1",
+   "text": "I run `pip install linkcheck`, then `linkcheck docs/` in my project."
+  },
+  {
+   "ref": "step-2",
+   "text": "It prints `docs/setup.md:14: https://old.example.com/guide (HTTP 404)` and `Checked 9 file(s), 1 broken link(s).`"
+  },
+  {
+   "ref": "step-3",
+   "text": "I fix the link and run it again. It prints `Checked 9 file(s), 0 broken link(s).` and exits with code 0."
+  }
+ ],
+ "notes": []
+}

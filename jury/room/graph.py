@@ -23,12 +23,13 @@ def build_graph(
     personas: dict[str, Persona],
     checkpointer: BaseCheckpointSaver | None = None,
     model_summary: bool = True,
+    inbox=None,  # inbox(thread_id) -> the builder's next mid-debate message, or None
 ):
     g = StateGraph(RoomState)
     g.add_node(first_impression.NODE, first_impression.make_node(llm, personas))
     g.add_node(dedupe.NODE, dedupe.node)
     g.add_node(ask_user.NODE, ask_user.node)
-    g.add_node(router.NODE, router.make_node(llm))
+    g.add_node(router.NODE, router.make_node(llm, inbox))
     g.add_node(debate_turn.NODE, debate_turn.make_node(llm, personas))
     g.add_node(final_verdict.NODE, final_verdict.make_node(llm, personas))
     g.add_node(summary.NODE, summary.make_node(llm, personas, use_model=model_summary))

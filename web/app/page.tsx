@@ -139,7 +139,22 @@ export default function Home() {
     setStreamRun((n) => n + 1); // the old stream closed when the review ended
   }, [reviewId]);
 
-  // message bar: after the review, talk to one reviewer with the room's history
+  // message bar: while the room debates, the message goes to the room and the next speaker answers it
+  const live = started && !room.debateOver && (room.status === "running" || room.status === "paused") && room.round >= 1;
+  const sendToRoom = async () => {
+    if (!reviewId || !barText.trim()) return;
+    setBarBusy(true);
+    setStartError(null);
+    try {
+      await api.say(reviewId, to || "everyone", barText.trim());
+      setBarText("");
+    } catch (e) {
+      setStartError((e as Error).message);
+    }
+    setBarBusy(false);
+  };
+
+  // after the review, talk to one reviewer with the room's history
   const sendToReviewer = async () => {
     if (!reviewId || !to || !barText.trim()) return;
     setBarBusy(true);
@@ -193,7 +208,7 @@ export default function Home() {
               <a href="/?view=home" aria-label="Project Jury home"><img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} /></a>
               <div className="crumb">/ {projectName}</div>
               {mode === "room" && (
-                <span className="sc-status">
+                <span className="sc-status" role="status">
                   {room.status === "done" ? "Review complete" : room.status === "paused" ? `${ROUND_LABEL[room.round]} · waiting for you` : ROUND_LABEL[room.round]}
                 </span>
               )}
@@ -283,24 +298,26 @@ export default function Home() {
 
               {started && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <form className="bar" onSubmit={(e) => { e.preventDefault(); sendToReviewer(); }}>
-                    <label htmlFor="msg" className="sr">Message a reviewer</label>
+                  <form className="bar" onSubmit={(e) => { e.preventDefault(); live ? sendToRoom() : sendToReviewer(); }}>
+                    <label htmlFor="msg" className="sr">{live ? "Message the room" : "Message a reviewer"}</label>
                     <input id="msg" className="input" value={barText} onChange={(e) => setBarText(e.target.value)}
-                           disabled={room.status !== "done" || barBusy} maxLength={4000}
-                           placeholder={room.status === "done" ? "Ask one reviewer about their verdict…" : "You can talk to a reviewer when the review ends"} />
+                           disabled={(!live && room.status !== "done") || barBusy} maxLength={live ? 2000 : 4000}
+                           placeholder={live ? "Say something to the room…" : room.status === "done" ? "Ask one reviewer about their verdict…" : "The debate is over. You can ask a reviewer when the verdicts are in"} />
                     <label htmlFor="to" className="sr">Send to</label>
                     <select id="to" className="select" value={to} onChange={(e) => { setTo(e.target.value); setChatPersona(e.target.value); }}
-                            disabled={room.status !== "done"}>
-                      <option value="">To: pick a reviewer</option>
-                      {room.personaIds.filter((p) => room.verdicts.some((v) => v.persona_id === p)).map((p) => (
+                            disabled={!live && room.status !== "done"}>
+                      <option value="">{live ? "To: Everyone" : "To: pick a reviewer"}</option>
+                      {room.personaIds.filter((p) => live ? room.personaState[p] !== "error" : room.verdicts.some((v) => v.persona_id === p)).map((p) => (
                         <option key={p} value={p}>To: {names[p]}</option>
                       ))}
                     </select>
-                    <button type="submit" className="send" aria-label="Send" disabled={room.status !== "done" || !to || !barText.trim() || barBusy}>
+                    <button type="submit" className="send" aria-label="Send"
+                            disabled={barBusy || !barText.trim() || (live ? false : room.status !== "done" || !to)}>
                       {Icon.send}
                     </button>
                   </form>
-                  <div className="hint">Opens a one-on-one chat that knows what the room said</div>
+                  {startError && <div className="form-error" role="alert">{startError}</div>}
+                  <div className="hint">{live ? "The next reviewer to speak answers you" : "Opens a one-on-one chat that knows what the room said"}</div>
                 </div>
               )}
             </>

@@ -92,8 +92,21 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
       {room.round >= 2 && (
         <section className="section" aria-labelledby="r2">
           <div id="r2" className="label">Round 2 · Debate</div>
+          <div className="feed" role="log" aria-label="Debate" aria-live="polite">
           {room.feed.map((item, i) =>
-            item.kind === "note" ? (
+            item.kind === "user" ? (
+              <div key={i} className="turn mine">
+                <div className="bubble">
+                  <span className="name">You, to {item.to === "everyone" ? "the room" : name(item.to)}</span>
+                  <div className="msg">{item.text}</div>
+                </div>
+              </div>
+            ) : item.kind === "missed" ? (
+              <div key={i} className="note">
+                Moderator: the debate ended before the room could answer your last
+                {item.count > 1 ? ` ${item.count} messages` : " message"}. Ask a reviewer directly below.
+              </div>
+            ) : item.kind === "note" ? (
               <div key={i} className="note">
                 {item.note.action === "speak"
                   ? `Moderator: ${name(item.note.speaker!)} next — ${item.note.reason}`
@@ -105,6 +118,7 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
                 <div className="bubble">
                   <span className="name">{name(item.turn.speaker)}</span>
                   {item.turn.contrarian && !item.turn.error && <span className="devil">arguing the other side</span>}
+                  {item.turn.addressed_by_user && !item.turn.error && <span className="devil">answering you</span>}
                   {item.turn.error ? (
                     <div className="msg muted">Could not respond this turn.</div>
                   ) : (
@@ -128,6 +142,7 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
           {room.speaking && room.status === "running" && (
             <div className="note thinking">{name(room.speaking)} is thinking</div>
           )}
+          </div>
           {questionCard /* a debate question belongs under the turn that asked it */}
         </section>
       )}

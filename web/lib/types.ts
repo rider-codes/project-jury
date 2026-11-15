@@ -39,6 +39,7 @@ export type Turn = {
   new_point: boolean;
   challenges: string[];
   open_question: string | null;
+  addressed_by_user?: boolean; // this turn answers something the builder said to the room
   contrarian?: boolean; // the room agreed, so the moderator asked this reviewer to argue the other side
   error?: string;
 };

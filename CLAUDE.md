@@ -68,7 +68,7 @@ Personas are just prompts in `personas/*.yaml`. Each file has `cares_about`, `ru
 - Agents that failed round 1 sit out the debate and verdicts.
 - When every reviewer holds the same stance and nobody has been challenged, the next speaker is asked once to argue the other side (evidence rules still apply).
 - Route to the user when an agent has an `open_question`: at most 2 times per debate, and never a question the user was already asked (even if they skipped it).
-- A message from the user ("To: Everyone" or one persona) becomes the next input; the addressed persona speaks next.
+- A message from the user ("To: Everyone" or one persona) becomes the next input; the addressed persona speaks next. The page can send one while the debate runs; the answer is owed even past the turn caps, at most 3 times per debate. A message that arrives after the debate ended is reported as missed.
 - After a review ends, a retry runs again only what failed (reviewers who missed round 1, failed verdicts, a summary the model did not write) on a fresh budget.
 - Stop at the first of: hard cap (2 to 3 turns per agent, about 8 to 12 turns total), or no new points and no stance changes in a full round.
 
@@ -96,6 +96,7 @@ Personas are just prompts in `personas/*.yaml`. Each file has `cares_about`, `ru
 - API: `uv run python -m jury.api` (real models from `.env`), or `--demo-model` for a free offline stand-in while working on the UI.
 - Web: `cd web && npm install && npm run dev`, then open http://localhost:3000. Set `NEXT_PUBLIC_API_URL` if the API is not on port 8000.
 - Tests: `uv run pytest` and `cd web && npx tsc --noEmit`.
+- Eval set: `uv run python -m jury.eval` (about 27 model requests for the 3 cases in `evals/cases.yaml`; `--case weak` runs one, `--demo-model` only checks the plumbing). Exits 1 if a case fails.
 
 ## Build milestones
 

@@ -170,3 +170,8 @@ h2 { margin: 0; font-size: 22px; font-weight: 800; }
 .retry > div { flex: 1 1 280px; min-width: 0; }
 .devil { margin-left: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ask); border: 1px solid currentColor; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .report-actions { margin-top: 18px; flex-wrap: wrap; gap: 12px; }
+
+/* the builder's own message in the debate feed */
+.turn.mine { justify-content: flex-end; }
+.turn.mine .bubble { max-width: 640px; border-color: var(--ask); background: var(--ask-bg); }
+.feed { display: flex; flex-direction: column; gap: 22px; }

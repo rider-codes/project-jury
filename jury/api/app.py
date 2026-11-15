@@ -6,6 +6,7 @@ GET  /api/reviews                  past reviews
 GET  /api/reviews/{id}             one review and its status
 GET  /api/reviews/{id}/events      Server-Sent Events, replayable (Last-Event-ID or ?after=)
 POST /api/reviews/{id}/answers     answer the open questions and resume
+POST /api/reviews/{id}/messages    say something to the room while it is still debating
 POST /api/reviews/{id}/retry       run again only what failed (reviewers, verdicts, summary)
 POST /api/chats                    start a one-on-one chat (clean, or with the room's history)
 GET  /api/chats/{id}
@@ -55,6 +56,11 @@ class NewReview(BaseModel):
 
 class Answers(BaseModel):
     answers: dict[str, str]
+
+
+class RoomMessage(BaseModel):
+    to: str = "everyone"  # "everyone" or one persona id
+    text: str = Field(min_length=1, max_length=2_000)
 
 
 class NewChat(BaseModel):
@@ -220,6 +226,23 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
             raise HTTPException(409, "this review is not waiting for answers")
         try:
             runner.resume(review_id, body.answers)
+        except Busy as e:
+            raise HTTPException(409, str(e))
+        return {"ok": True}
+
+    @app.post("/api/reviews/{review_id}/messages", status_code=202)
+    async def say(review_id: str, body: RoomMessage):
+        r = review_or_404(review_id)
+        if body.to != "everyone" and body.to not in r["persona_ids"]:
+            raise HTTPException(422, "send it to everyone or to a reviewer in this room")
+        events = [e["type"] for _, e in store.events_after(review_id)]
+        ended = any(e["type"] == "router" and e.get("action") == "end" for _, e in store.events_after(review_id))
+        if store.status(review_id) in TERMINAL or ended or "brief" not in events:
+            raise HTTPException(409, "the debate is not running; when the review ends you can ask one reviewer directly")
+        if not body.text.strip():
+            raise HTTPException(422, "the message is empty")
+        try:
+            runner.say(review_id, body.to, body.text.strip())
         except Busy as e:
             raise HTTPException(409, str(e))
         return {"ok": True}

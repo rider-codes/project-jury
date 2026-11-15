@@ -1,0 +1,31 @@
+{
+ "project_name": "notes-app",
+ "repo_url": "https://github.com/example/notes-app",
+ "summary": "my notes app",
+ "files": {
+  "README.md": "# notes-app\n\nmy notes app\n\nrun app.py\n",
+  "app.py": "from flask import Flask, request\nimport sqlite3\n\napp = Flask(__name__)\napp.secret_key = \"secret\"\nADMIN_PASSWORD = \"admin123\"\n\n\ndef db():\n    return sqlite3.connect(\"notes.db\")\n\n\n@app.route(\"/\")\ndef index():\n    rows = db().execute(\"select * from notes\").fetchall()\n    html = \"<h1>notes</h1><form method=post action=/add><input name=text><button>add</button></form>\"\n    for r in rows:\n        html += \"<p>\" + r[1] + \" <a href=/delete?id=\" + str(r[0]) + \">x</a></p>\"\n    return html\n\n\n@app.route(\"/add\", methods=[\"POST\"])\ndef add():\n    text = request.form[\"text\"]\n    con = db()\n    con.execute(\"insert into notes (text) values ('\" + text + \"')\")\n    con.commit()\n    return index()\n\n\n@app.route(\"/delete\")\ndef delete():\n    con = db()\n    con.execute(\"delete from notes where id = \" + request.args[\"id\"])\n    con.commit()\n    return index()\n\n\n@app.route(\"/admin\")\ndef admin():\n    if request.args.get(\"pw\") == ADMIN_PASSWORD:\n        db().execute(\"delete from notes\")\n        return \"all deleted\"\n    return \"no\"\n\n\n# TODO make the table automatically\n# TODO login\n\nif __name__ == \"__main__\":\n    app.run(debug=True, host=\"0.0.0.0\")\n"
+ },
+ "tree": [
+  "README.md",
+  "app.py",
+  "notes.db",
+  "old/app_backup.py",
+  "old/app_backup2.py"
+ ],
+ "demo": [
+  {
+   "ref": "step-1",
+   "text": "I run `python app.py`. The page opens with a text box and an Add button."
+  },
+  {
+   "ref": "step-2",
+   "text": "I add the note \"call mum\" and it appears in the list."
+  },
+  {
+   "ref": "step-3",
+   "text": "I add the note \"don't forget\" and the page shows `sqlite3.OperationalError: near \"t\": syntax error`."
+  }
+ ],
+ "notes": []
+}

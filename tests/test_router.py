@@ -186,3 +186,19 @@ def test_no_devils_advocate_when_the_room_already_disagrees():
     # same stances, but a challenge was already made
     assert not decide(ROOM, AGREE, [turn("senior_engineer", challenges=["ux_designer"])], set()).contrarian
     assert not decide(["senior_engineer"], {"senior_engineer": "unsure"}, [], set()).contrarian
+
+
+def test_builder_message_is_answered_even_past_the_cap():
+    full = [turn(p) for p in ROOM] * 2  # 8 turns: the cap for four reviewers
+    assert decide(ROOM, AGREE, full, set()).action == "end"
+    d = decide(ROOM, AGREE, full, set(), {"to": "senior_engineer", "text": "one more thing"})
+    assert (d.action, d.speaker) == ("speak", "senior_engineer")
+    # to everyone: someone other than the last speaker answers
+    d = decide(ROOM, AGREE, full, set(), {"to": "everyone", "text": "hi"})
+    assert d.action == "speak" and d.speaker != "general_user"
+
+
+def test_builder_cannot_keep_the_debate_open_forever():
+    answered = [{**turn(p), "addressed_by_user": True} for p in ROOM[:3]]
+    full = [turn(p) for p in ROOM] * 2 + answered
+    assert decide(ROOM, AGREE, full, set(), {"to": "everyone", "text": "again"}).action == "end"

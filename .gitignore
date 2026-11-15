@@ -18,3 +18,6 @@ web/.env.local
 
 # default output of `python -m jury.ingest`; briefs can hold copied repo code
 /brief.json
+
+# eval run logs
+evals/results/

@@ -3,7 +3,8 @@ import type { Impression, Question, ReviewEvent, RouterNote, Stance, Summary, Tu
 
 export type Status = "idle" | "ingesting" | "running" | "paused" | "done" | "error";
 export type PersonaState = "thinking" | "waiting" | "spoke" | "error";
-export type FeedItem = { kind: "note"; note: RouterNote } | { kind: "turn"; turn: Turn };
+export type FeedItem = { kind: "note"; note: RouterNote } | { kind: "turn"; turn: Turn }
+  | { kind: "user"; to: string; text: string } | { kind: "missed"; count: number };
 
 export type RoomState = {
   status: Status;
@@ -21,6 +22,7 @@ export type RoomState = {
   verdicts: Verdict[];
   summary: Summary | null;
   round: 0 | 1 | 2 | 3;
+  debateOver: boolean; // the moderator closed the debate: the room no longer takes messages
   error: string | null;
   usage: { calls: number; tokens: number } | null;
   usageBefore: { calls: number; tokens: number } | null; // spent before a retry, which starts a fresh count
@@ -41,6 +43,7 @@ export const emptyRoom: RoomState = {
   verdicts: [],
   summary: null,
   round: 0,
+  debateOver: false,
   error: null,
   usage: null,
   usageBefore: null,
@@ -108,6 +111,7 @@ export function roomReducer(s: RoomState, action: Action): RoomState {
       return {
         ...s,
         round: note.action === "end" ? 3 : Math.max(s.round, 2) as 2 | 3,
+        debateOver: s.debateOver || note.action === "end",
         speaking: note.action === "speak" ? note.speaker : null,
         feed: note.action === "ask_user" ? s.feed : [...s.feed, { kind: "note", note }],
         personaState: note.action === "speak" && note.speaker
@@ -127,6 +131,10 @@ export function roomReducer(s: RoomState, action: Action): RoomState {
         personaState: { ...s.personaState, [t.speaker]: t.error ? "error" : "spoke" },
       };
     }
+    case "user_message":
+      return { ...s, feed: [...s.feed, { kind: "user", to: e.to, text: e.text }] };
+    case "user_message_missed":
+      return { ...s, feed: [...s.feed, { kind: "missed", count: e.count }] };
     case "verdict":
       return {
         ...s,

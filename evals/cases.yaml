@@ -1,0 +1,52 @@
+# The eval set: projects whose right answer we already know.
+# Run it after any prompt or model change:  uv run python -m jury.eval
+#
+# Each case is a hand-written brief (small, so a run is cheap) or a `repo_url`.
+# `expect` is checked by code:
+#   min_useful / max_useful / min_not_useful / max_not_useful   counts of final verdicts
+#   must_notice   each item needs one verified claim that matches it: any of the words in
+#                 `any` appears in the claim's text, ref or quote; `kind` and `ref` narrow it
+#   max_dropped_share   share of claims the verifier may drop (invented or misquoted evidence)
+
+personas: [senior_engineer, product_manager]
+
+cases:
+  - id: good
+    about: A small, finished tool with tests, CI, an honest README and a demo that works.
+    brief: briefs/good.json
+    expect:
+      min_useful: 1          # the panel must be able to praise, not only criticise
+      max_not_useful: 0
+      must_notice:
+        - name: sees the tests or the CI
+          any: [tests/, pytest, ci.yml, workflow]
+      max_dropped_share: 0.4
+
+  - id: weak
+    about: One file, a one-line README, SQL built from user input, a demo that crashes.
+    brief: briefs/weak.json
+    expect:
+      max_useful: 0
+      min_not_useful: 1
+      must_notice:
+        - name: sees the unsafe SQL or the hardcoded password
+          any: ["insert into", "delete from", admin123, secret_key, debug=True]
+        - name: sees the crash in the demo
+          kind: demo
+          any: [OperationalError, syntax error]
+      max_dropped_share: 0.4
+
+  - id: misleading
+    about: The README promises tests, CI, eviction and persistence. None of it exists.
+    brief: briefs/misleading.json
+    expect:
+      max_useful: 0          # believing the README is the failure this case is for
+      min_not_useful: 1
+      must_notice:
+        - name: checks the README's claims against the code or the file tree
+          any: ["not implemented", NotImplementedError, "not used yet", "just grows", tests, .github, bench]
+        - name: uses the file tree to show something is missing
+          kind: tree
+          ref: absent
+          any: [test, .github, bench, workflow]
+      max_dropped_share: 0.4

@@ -34,6 +34,8 @@ def render(state: RoomState, personas: dict[str, Persona]) -> str:
     if turns:
         lines.append("\nDebate so far:")
         for n, t in enumerate(turns, 1):
+            if t.get("user_text"):
+                lines.append(f"- the builder said to the room: {t['user_text']}")
             if t.get("error"):
                 lines.append(f"- turn {n}, {name(t['speaker'])}: (could not respond)")
                 continue

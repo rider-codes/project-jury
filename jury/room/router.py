@@ -18,6 +18,7 @@ Order of rules:
 from collections import Counter
 from dataclasses import dataclass
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.types import Send
 
 from jury.models import RouterDecision
@@ -32,6 +33,7 @@ class Caps:
     per_agent: int = 2
     max_total: int = 12
     max_debate_questions: int = 2  # pauses after round 1; more and the room nags the user
+    max_user_turns: int = 3  # turns that answer the builder may go past the caps, this many times
 
     def total_for(self, n_agents: int) -> int:
         return min(self.max_total, self.per_agent * n_agents)
@@ -65,21 +67,30 @@ def decide(
             return RouterDecision(action="ask_user", speaker=turns[last_i]["speaker"],
                                   reason="an agent has an open question")
 
+    # The builder spoke and nobody has answered yet: one more turn is owed, even past the caps.
+    # Bounded, so a builder who keeps talking cannot keep the debate open forever.
+    owed = bool(user_message) and sum(1 for t in turns if t.get("addressed_by_user")) < caps.max_user_turns
+
     total = caps.total_for(len(active))
-    if len(turns) >= total:
+    if len(turns) >= total and not owed:
         return RouterDecision(action="end", reason=f"turn cap reached ({total} turns)")
 
     k = len(active)
-    if len(turns) >= k and all(not t.get("new_point") and not t.get("stance_changed") for t in turns[-k:]):
+    stale = len(turns) >= k and all(not t.get("new_point") and not t.get("stance_changed") for t in turns[-k:])
+    if stale and not owed:
         return RouterDecision(action="end", reason="a full round with no new points or stance changes")
 
     counts = Counter(t["speaker"] for t in turns)
     eligible = [p for p in active if counts[p] < caps.per_agent]
+    if owed and len(turns) >= total:
+        eligible = list(active)  # past the cap, whoever answers the builder may use an extra turn
     if not eligible:
         return RouterDecision(action="end", reason="every agent has used its turns")
 
     to = (user_message or {}).get("to")
     if to in eligible:
+        return RouterDecision(action="speak", speaker=to, reason="the user addressed them")
+    if owed and to in active and to != (turns[-1]["speaker"] if turns else None):
         return RouterDecision(action="speak", speaker=to, reason="the user addressed them")
 
     # a room that agrees from the start never tests its view: one reviewer argues the other side, once
@@ -139,9 +150,19 @@ def reserve_ok(llm, n_active: int) -> bool:
     return budget.can_afford(1 + n_active + 1)
 
 
-def make_node(llm):
-    def node(state: RoomState) -> dict:
-        return _node(state, reserve_ok(llm, len(active_personas(state))))
+def make_node(llm, inbox=None):
+    """inbox(thread_id) hands over the builder's next message, if one came in mid-debate."""
+
+    def node(state: RoomState, config: RunnableConfig) -> dict:
+        message = None
+        if inbox and not state.get("user_message"):
+            message = inbox(config["configurable"]["thread_id"])
+        if message:
+            state = {**state, "user_message": message}
+        update = _node(state, reserve_ok(llm, len(active_personas(state))))
+        if message:
+            update["user_message"] = message
+        return update
 
     return node
 

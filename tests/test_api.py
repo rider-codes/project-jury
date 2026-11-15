@@ -256,3 +256,26 @@ def test_retry_refused_when_the_project_was_never_read(client):
     rid = client.post("/api/reviews", json={"repo_url": "https://github.com/o/broken"}).json()["id"]
     assert wait_for(client, rid, {"error"}) == "error"
     assert client.post(f"/api/reviews/{rid}/retry").status_code == 409
+
+
+def test_builder_can_talk_to_the_room_mid_debate(tmp_path):
+    app = create_app(str(tmp_path / "j.sqlite"), lambda: DemoLLM(delay=0.05))
+    with TestClient(app) as c:
+        ids = ["senior_engineer", "ux_designer"]
+        rid = c.post("/api/reviews", json={"sample": True, "persona_ids": ids}).json()["id"]
+        assert c.post(f"/api/reviews/{rid}/messages", json={"to": "hiring_manager", "text": "hi"}).status_code == 422
+        # wait until the project is read, then speak
+        end = time.time() + 10
+        while "brief" not in [e["type"] for e in client_events(c, rid)] and time.time() < end:
+            time.sleep(0.02)
+        r = c.post(f"/api/reviews/{rid}/messages", json={"to": "everyone", "text": "It is deployed at example.com."})
+        assert r.status_code == 202
+        assert run_to_done(c, rid) == "done"
+        events = client_events(c, rid)
+        said = [e for e in events if e["type"] == "user_message"]
+        assert said == [{"type": "user_message", "to": "everyone", "text": "It is deployed at example.com."}]
+        answered = [e for e in events if e["type"] == "debate_turn" and e.get("addressed_by_user")]
+        assert len(answered) == 1 and answered[0]["user_text"] == "It is deployed at example.com."
+        assert not [e for e in events if e["type"] == "user_message_missed"]
+        # once the review is over the room is closed
+        assert c.post(f"/api/reviews/{rid}/messages", json={"text": "late"}).status_code == 409

@@ -13,10 +13,11 @@ def make_node(llm: JsonModel, personas: dict[str, Persona]):
         pid = state["next_action"]["speaker"]
         before = current_stances(state).get(pid, "unsure")
         um = state.get("user_message")
-        addressed = bool(um) and um.get("to") in (pid, "everyone")
+        addressed = bool(um)  # the router picked this speaker to answer the builder
         others = {p: personas[p].name for p in active_personas(state) if p != pid}
         contrarian = bool(state["next_action"].get("contrarian"))
-        base = {"speaker": pid, "addressed_by_user": addressed, "contrarian": contrarian}
+        base = {"speaker": pid, "addressed_by_user": addressed, "contrarian": contrarian,
+                "user_text": um["text"] if addressed else None}
         update: dict = {"user_message": None} if addressed else {}
 
         try:

@@ -38,6 +38,7 @@ class Runner:
         self.llm_factory, self.brief_builder, self.site_adder = llm_factory, brief_builder, site_adder
         self.tasks: dict[str, asyncio.Task] = {}
         self.llms: dict[str, JsonModel] = {}
+        self.inbox: dict[str, list[dict]] = {}  # review id -> the builder's messages the room has not seen
 
     def is_running(self, review_id: str) -> bool:
         t = self.tasks.get(review_id)
@@ -61,6 +62,26 @@ class Runner:
     def resume(self, review_id: str, answers: dict[str, str]) -> None:
         # an empty dict is falsy, and LangGraph then pauses again instead of resuming
         self._spawn(review_id, self._run(review_id, Command(resume=answers or {"": ""}), resumed=True))
+
+    MAX_WAITING = 3
+
+    def say(self, review_id: str, to: str, text: str) -> None:
+        """The builder talks to the room. The moderator hands it over before the next turn."""
+        waiting = self.inbox.setdefault(review_id, [])
+        if len(waiting) >= self.MAX_WAITING:
+            raise Busy("the room has not answered your earlier messages yet")
+        waiting.append({"to": to, "text": text})
+        self.store.add_event(review_id, {"type": "user_message", "to": to, "text": text})
+
+    def _take(self, review_id: str) -> dict | None:
+        waiting = self.inbox.get(review_id)
+        return waiting.pop(0) if waiting else None
+
+    def _unheard(self, review_id: str) -> None:
+        """The review ended with messages nobody answered: say so instead of dropping them silently."""
+        waiting = self.inbox.pop(review_id, [])
+        if waiting and self.store.status(review_id) != "paused":
+            self.store.add_event(review_id, {"type": "user_message_missed", "count": len(waiting)})
 
     async def retry_plan(self, review_id: str) -> dict | None:
         """What a retry would run again, or None when there is nothing to go on
@@ -135,8 +156,10 @@ class Runner:
         config = {"configurable": {"thread_id": review_id}}
         try:
             async with AsyncSqliteSaver.from_conn_string(self.db_path) as saver:
-                graph = build_graph(llm, self.personas, saver)
+                graph = build_graph(llm, self.personas, saver, inbox=self._take)
                 async for event in stream_events(graph, graph_input, config):
+                    if event["type"] == "done":
+                        self._unheard(review_id)  # before "done", so the page still gets it
                     self.store.add_event(review_id, event)
         except Exception as e:
             self.store.add_event(review_id, {"type": "error", "message": f"{type(e).__name__}: {e}"[:500]})
