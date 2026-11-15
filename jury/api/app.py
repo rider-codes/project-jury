@@ -32,6 +32,7 @@ from jury.api.store import TERMINAL, ReviewStore
 from jury.chat.room_history import load_room
 from jury.chat.session import ChatSession
 from jury.chat.store import ChatStore
+from jury.ingest.site_log import vision_calls
 from jury.personas import load_all
 from jury.room.state import DEFAULT_ROOM
 
@@ -44,6 +45,7 @@ PING_EVERY = 50  # polls (~15 s)
 
 class NewReview(BaseModel):
     repo_url: str = ""
+    site_url: str = Field("", max_length=500)  # the live site, captured with a headless browser
     demo: str = Field("", max_length=20_000)
     sample: bool = False  # use examples/sample_brief.json instead of a repo
     persona_ids: list[str] = Field(default_factory=lambda: list(DEFAULT_ROOM))
@@ -68,7 +70,7 @@ class Login(BaseModel):
     code: str = Field(max_length=200)
 
 
-def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder=None) -> FastAPI:
+def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder=None, site_adder=None) -> FastAPI:
     """`db_path` holds the LangGraph checkpoints. Reviews, events and chats go in a
     separate `<name>_app.sqlite` beside it: sharing one file let the event log and
     the checkpointer lock each other out ("database is locked")."""
@@ -78,6 +80,8 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
     store = ReviewStore(app_db)
     chats = ChatStore(app_db)
     kwargs = {"brief_builder": brief_builder} if brief_builder else {}
+    if site_adder:
+        kwargs["site_adder"] = site_adder
     runner = Runner(db_path, store, personas, llm_factory, **kwargs)
     chat_llms: dict[str, JsonModel] = {}
 
@@ -135,7 +139,8 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         llm = llm_factory()
         demo = type(llm).__name__ == "DemoLLM"
         q = None if demo or not hasattr(llm, "quota") else await llm.quota()
-        return {"demo_model": demo, "free_quota": q}
+        # a live site adds up to this many vision calls (one per screenshot described)
+        return {"demo_model": demo, "free_quota": q, "site_calls": vision_calls()}
 
     @app.post("/api/reviews", status_code=201)
     async def new_review(body: NewReview):
@@ -156,8 +161,15 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
                 ref = parse_repo_url(body.repo_url)
             except IngestError as e:
                 raise HTTPException(422, str(e))
+            site_url = body.site_url.strip()
+            if site_url:
+                from jury.ingest.site import SiteError, normalize_url
+                try:
+                    site_url = normalize_url(site_url)
+                except SiteError as e:
+                    raise HTTPException(422, str(e))
             store.create(review_id, ref.repo, ref.url, ids)
-            runner.start(review_id, ids, repo_url=body.repo_url, demo_text=body.demo)
+            runner.start(review_id, ids, repo_url=body.repo_url, demo_text=body.demo, site_url=site_url)
         return {"id": review_id}
 
     @app.get("/api/reviews")

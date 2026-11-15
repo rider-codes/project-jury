@@ -43,6 +43,21 @@ class DemoStep(BaseModel):
     text: str
 
 
+class SiteView(BaseModel):
+    """One page of the live site at one width, as a first-time visitor sees it."""
+
+    ref: str  # e.g. "page-1-desktop", "page-2-phone"
+    url: str
+    width: Literal["desktop", "phone"]
+    title: str = ""
+    headings: list[str] = []
+    buttons: list[str] = []
+    links: list[str] = []  # link text, then the path it goes to
+    facts: list[str] = []  # measured by code, e.g. "the page is wider than the screen"
+    text: str = ""  # visible text, capped. Empty for a phone view whose text matches desktop.
+    log: str = ""  # what a vision model saw in the screenshot (empty if none was made)
+
+
 class Brief(BaseModel):
     """The shared project brief every agent reads."""
 
@@ -52,14 +67,17 @@ class Brief(BaseModel):
     files: dict[str, str]  # path -> content (already capped by ingestion)
     tree: list[str] = []  # every path in the repo, so agents know what exists beyond `files`
     demo: list[DemoStep] = []
+    site_url: str = ""  # the live site, if one was given
+    site: list[SiteView] = []
     notes: list[str] = []  # what ingestion left out or changed (caps hit, secrets redacted)
 
 
 class Evidence(BaseModel):
-    kind: Literal["file", "demo", "tree"]
+    kind: Literal["file", "demo", "tree", "site"]
     # file: a file path. demo: a demo step ref. tree: "present" or "absent".
+    # site: a site view ref such as "page-1-desktop" (or "page-1" for either width).
     ref: str
-    # file / demo: exact text from that file or step. tree: a path or file name to look for.
+    # file / demo / site: exact text from that file, step, or page's captured text or log. tree: a path or file name to look for.
     quote: str
 
 
@@ -131,6 +149,16 @@ class RoomSummary(BaseModel):
     agreed: list[str] = []
     split: list[str] = []
     top_changes: list[str] = []
+
+
+class SiteLog(BaseModel):
+    """The vision model's reading of one screenshot."""
+
+    on_screen: Said  # what is visible, top to bottom
+    what_it_is: str  # what a first-time visitor would think this is, or "not clear"
+    main_action: str  # the most prominent next step, or "none visible"
+    next_step: str  # what a first-time visitor would most likely do next
+    problems: list[str] = []  # visible problems: clipped text, overlap, low contrast, dead ends
 
 
 class ClaimCheck(BaseModel):

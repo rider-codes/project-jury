@@ -22,10 +22,14 @@ class DemoLLM:
         self.budget = Budget(max_calls=200)
         self.turns_by_persona: dict[str, int] = {}
 
-    async def complete_json(self, tier: Tier, messages: list[dict]) -> dict:
+    async def complete_json(self, tier: Tier, messages: list[dict], vision: bool = False) -> dict:
         self.budget.reserve()
         await asyncio.sleep(self.delay)
         self.budget.record(1000)
+        if vision:
+            return {"on_screen": "(Demo model, not a real reading.) A page with a heading and some buttons.",
+                    "what_it_is": "not clear (demo model)", "main_action": "none visible",
+                    "next_step": "(demo model) scroll down", "problems": []}
         system = messages[0]["content"]
         everything = "\n".join(m["content"] for m in messages)
         last = messages[-1]["content"]
@@ -59,7 +63,7 @@ def _evidence(messages: list[dict]) -> list[dict]:
     """Quote real lines from the brief so claims verify."""
     for m in messages:
         c = m["content"]
-        if c.startswith("<project_brief>"):
+        if isinstance(c, str) and c.startswith("<project_brief>"):
             brief = json.loads(c[len("<project_brief>"):-len("</project_brief>")])
             out = []
             for path, text in brief["files"].items():

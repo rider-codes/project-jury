@@ -26,6 +26,7 @@ const post = <T,>(path: string, body: unknown) => call<T>(path, { method: "POST"
 export type Quota = {
   demo_model: boolean;
   free_quota: { remaining: number; limit: number } | null;
+  site_calls?: number; // vision calls a live site adds
 };
 
 export const api = {
@@ -34,7 +35,7 @@ export const api = {
   personas: () => call<Persona[]>("/api/personas"),
   quota: () => call<Quota>("/api/quota"),
   reviews: () => call<ReviewListItem[]>("/api/reviews"),
-  startReview: (body: { repo_url?: string; demo?: string; sample?: boolean; persona_ids: string[] }) =>
+  startReview: (body: { repo_url?: string; site_url?: string; demo?: string; sample?: boolean; persona_ids: string[] }) =>
     post<{ id: string }>("/api/reviews", body),
   answer: (id: string, answers: Record<string, string>) => post<{ ok: true }>(`/api/reviews/${id}/answers`, { answers }),
   startChat: (body: { persona_id: string; review_id?: string; with_history?: boolean; sample?: boolean }) =>

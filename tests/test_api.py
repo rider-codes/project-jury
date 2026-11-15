@@ -79,7 +79,7 @@ def test_no_access_code_means_open(client):
 
 
 def test_quota_endpoint_with_demo_model(client):
-    assert client.get("/api/quota").json() == {"demo_model": True, "free_quota": None}
+    assert client.get("/api/quota").json() == {"demo_model": True, "free_quota": None, "site_calls": 4}
 
 
 def test_personas(client):
@@ -135,6 +135,40 @@ def test_repo_review_and_ingest_failure(client):
     assert wait_for(client, bad, {"error"}) == "error"
     events, _ = sse(client, bad)  # stream closes on error
     assert events[-1]["type"] == "error" and "private repos" in events[-1]["message"]
+
+
+def test_review_with_live_site(tmp_path):
+    from jury.ingest.site import SiteCapture, Shot
+    from jury.ingest.site_log import add_site
+    from jury.models import SiteView
+
+    seen = []
+
+    def capture(url, max_pages):
+        seen.append(url)
+        return SiteCapture(url=url, shots=[Shot(view=SiteView(ref="page-1-desktop", url=url, width="desktop",
+                                                              text="Welcome to widget"), image=b"jpg")])
+
+    async def adder(llm, brief, site_url):
+        return await add_site(llm, brief, site_url, capture=capture)
+
+    def builder(url, demo, token):
+        return Brief(project_name="widget", repo_url="https://github.com/o/widget", summary="A widget.",
+                     files={"README.md": "# widget\n\nA widget that does things well.\n"}, tree=["README.md"])
+
+    app = create_app(str(tmp_path / "j.sqlite"), lambda: DemoLLM(delay=0), brief_builder=builder, site_adder=adder)
+    with TestClient(app) as c:
+        assert c.post("/api/reviews", json={"repo_url": "https://github.com/o/widget", "site_url": "https://"}).status_code == 422
+        rid = c.post("/api/reviews", json={"repo_url": "https://github.com/o/widget",
+                                           "site_url": "widget.example.com"}).json()["id"]
+        assert run_to_done(c, rid) == "done"
+        events = client_events(c, rid)
+        assert seen == ["https://widget.example.com/"]
+        assert {"type": "status", "stage": "site", "site_url": "https://widget.example.com/"} in events
+        brief = next(e for e in events if e["type"] == "brief")
+        assert brief["site_views"] == 1 and brief["site_logs"] == 1
+        first_usage = next(e for e in events if e["type"] == "usage")  # at the pause after round 1
+        assert first_usage["calls"] == 1 + 4  # the vision call is on the review's budget
 
 
 def test_chat_clean_and_with_room_history(client):

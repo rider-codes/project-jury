@@ -98,6 +98,12 @@ class LLM:
             raise LLMError(f"no model set for tier '{tier.value}' (JURY_MODEL_{tier.value.upper()})")
         return models
 
+    def vision_models(self) -> list[str]:
+        """Models that read screenshots: JURY_MODEL_VISION, else the mid tier."""
+        raw = os.environ.get("JURY_MODEL_VISION", "")
+        models = [m.strip() for m in raw.split(",") if m.strip()]
+        return models or self.models_for(Tier.mid)
+
     def model_for(self, tier: Tier) -> str:
         return self.models_for(tier)[0]
 
@@ -114,19 +120,21 @@ class LLM:
         except (httpx.HTTPError, ValueError):
             return None
         daily = data.get("free_model_daily_requests") or {}
-        all_free = all(m.endswith(":free") for t in Tier for m in self.models_for(t))
+        all_free = all(m.endswith(":free") for t in Tier for m in self.models_for(t)) and all(
+            m.endswith(":free") for m in self.vision_models())
         if not daily or not all_free:
             return None
         return {"remaining": daily.get("remaining"), "limit": daily.get("limit"), "used": daily.get("used")}
 
-    async def complete_json(self, tier: Tier, messages: list[dict]) -> dict:
+    async def complete_json(self, tier: Tier, messages: list[dict], vision: bool = False) -> dict:
         """Call the model and return its JSON object reply. Falls back to the tier's next model
-        when one is overloaded upstream or erroring."""
+        when one is overloaded upstream or erroring. vision: the messages hold images, so use
+        the vision models instead of the tier's."""
         if self._sem is None:
             self._sem = asyncio.Semaphore(self.max_concurrency)
         self.budget.reserve()
         url, _ = PROVIDERS[self.provider]
-        models = self.models_for(tier)
+        models = self.vision_models() if vision else self.models_for(tier)
         data = None
         for i, model in enumerate(models):
             payload = {

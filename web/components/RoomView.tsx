@@ -29,7 +29,7 @@ export function RoomView({ room, names, onAnswer, readOnly, compact }: Props) {
   ) : null;
   return (
     <>
-      {room.status === "ingesting" && <p className="muted">Reading the repository and building the project brief…</p>}
+      {room.status === "ingesting" && <p className="muted">{room.capturing ? "Opening your live site and taking screenshots at desktop and phone width…" : "Reading the repository and building the project brief…"}</p>}
       {room.project && room.project.notes.length > 0 && (
         <p className="muted" style={{ fontSize: 13 }}>Brief notes: {room.project.notes.join(" · ")}</p>
       )}

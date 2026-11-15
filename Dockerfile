@@ -22,6 +22,9 @@ COPY personas/ personas/
 COPY prompts/ prompts/
 COPY examples/ examples/
 RUN uv sync --frozen --no-dev
+# headless Chromium for capturing a project's live site (shared path so the non-root user can use it)
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN /app/.venv/bin/python -m playwright install --with-deps --only-shell chromium && chmod -R a+rX /ms-playwright
 COPY --from=web /web/out web/out
 
 RUN useradd --create-home jury && mkdir -p /app/data && chown jury /app/data

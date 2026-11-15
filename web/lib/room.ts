@@ -7,7 +7,9 @@ export type FeedItem = { kind: "note"; note: RouterNote } | { kind: "turn"; turn
 
 export type RoomState = {
   status: Status;
-  project: { name: string; repo_url: string; summary: string; files: number; demo_steps: number; notes: string[] } | null;
+  capturing: boolean; // ingesting: the live site is being opened and photographed
+  project: { name: string; repo_url: string; summary: string; files: number; demo_steps: number;
+             site_url: string; site_views: number; site_logs: number; notes: string[] } | null;
   personaIds: string[];
   stance: Record<string, Stance>;
   personaState: Record<string, PersonaState>;
@@ -25,6 +27,7 @@ export type RoomState = {
 
 export const emptyRoom: RoomState = {
   status: "idle",
+  capturing: false,
   project: null,
   personaIds: [],
   stance: {},
@@ -52,7 +55,7 @@ export function roomReducer(s: RoomState, action: Action): RoomState {
   const e = action.event as any;
   switch (e.type) {
     case "status":
-      return { ...s, status: "ingesting" };
+      return { ...s, status: "ingesting", capturing: e.stage === "site" };
     case "brief": {
       const ids: string[] = e.persona_ids ?? s.personaIds;
       return {
@@ -62,7 +65,8 @@ export function roomReducer(s: RoomState, action: Action): RoomState {
         personaIds: ids,
         personaState: Object.fromEntries(ids.map((p) => [p, "thinking" as const])),
         project: { name: e.project_name, repo_url: e.repo_url, summary: e.summary, files: e.files,
-                   demo_steps: e.demo_steps, notes: e.notes },
+                   demo_steps: e.demo_steps, site_url: e.site_url ?? "", site_views: e.site_views ?? 0,
+                   site_logs: e.site_logs ?? 0, notes: e.notes },
       };
     }
     case "impression":

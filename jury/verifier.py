@@ -51,6 +51,24 @@ def _check_tree(claim: Claim, brief: Brief) -> ClaimCheck:
     return ClaimCheck(claim=claim, ok=ok, problem=None if ok else problem)
 
 
+def site_source(brief: Brief, ref: str) -> str | None:
+    """Everything a site view shows that can be quoted: its text, headings, buttons, links,
+    measured facts and screenshot log. "page-2" (no width) means both widths of page 2.
+    A phone view whose text matched desktop falls back to the desktop text."""
+    ref = ref.strip().lower().removeprefix("site:").strip()
+    views = [v for v in brief.site if v.ref == ref or v.ref.rsplit("-", 1)[0] == ref]
+    if not views:
+        return None
+    parts = []
+    for v in views:
+        text = v.text
+        if not text and v.width == "phone":
+            twin = next((d for d in brief.site if d.ref == v.ref.replace("-phone", "-desktop")), None)
+            text = twin.text if twin else ""
+        parts += [v.title, text, *v.headings, *v.buttons, *v.links, *v.facts, v.log]
+    return "\n".join(p for p in parts if p)
+
+
 def _path(ref: str) -> str:
     """Drop a leading './' only. (lstrip('./') also ate the dot in .github/ and .gitignore.)"""
     ref = ref.strip()
@@ -67,7 +85,11 @@ def check_claim(claim: Claim, brief: Brief) -> ClaimCheck:
 
     if ev.kind == "tree":
         return _check_tree(claim, brief)
-    if ev.kind == "file":
+    if ev.kind == "site":
+        source = site_source(brief, ev.ref)
+        if source is None:
+            return ClaimCheck(claim=claim, ok=False, problem=f"site page not captured: {ev.ref}")
+    elif ev.kind == "file":
         source = brief.files.get(_path(ev.ref))
         if source is None:
             return ClaimCheck(claim=claim, ok=False, problem=f"file not in brief: {ev.ref}")

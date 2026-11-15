@@ -30,7 +30,7 @@ Improvements found in the first real runs (ledgerline full review, doorknock one
 
 ## 4. Product features
 
-- [ ] **16. Live website review.** Headless browser capture plus a vision model into a citable site log.
+- [x] **16. Live website review.** Headless browser capture plus a vision model into a citable site log.
 - [ ] **17. Video demo log** (milestone 7).
 - [ ] **18. Talk to the room mid-debate.** Router supports it; the page only allows it after the review ends.
 - [ ] **19. Re-run a failed round from the page.** Ledgerline's verdicts had to be re-run with a script.
@@ -48,6 +48,6 @@ Improvements found in the first real runs (ledgerline full review, doorknock one
 ## 6. Engineering
 
 - [x] **27. CI for Jury itself.** It flagged missing CI on all three reviewed projects and has none.
-- [ ] **28. Push to GitHub, then deploy.** Docker plus a free host (SQLite resets there).
+- [x] **28. Push to GitHub, then deploy.** Docker plus a free host (SQLite resets there).
 - [ ] **29. Phone width and accessibility pass** on the web page.
 - [ ] **30. One chat store.** The CLI chat writes to `jury.sqlite`, the web chat to `jury_app.sqlite`.

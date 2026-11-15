@@ -12,7 +12,7 @@ export type Persona = {
 
 export type Claim = {
   text: string;
-  evidence: { kind: "file" | "demo" | "tree"; ref: string; quote: string };
+  evidence: { kind: "file" | "demo" | "tree" | "site"; ref: string; quote: string };
 };
 
 export type Rejected = { text: string; problem: string };

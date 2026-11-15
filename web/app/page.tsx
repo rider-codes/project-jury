@@ -32,6 +32,7 @@ export default function Home() {
   const [drawer, setDrawer] = useState(false);
   const [past, setPast] = useState<ReviewListItem[]>([]);
   const [repo, setRepo] = useState("");
+  const [site, setSite] = useState("");
   const [demo, setDemo] = useState("");
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -90,8 +91,10 @@ export default function Home() {
   const inRoom = started ? room.personaIds : selected;
   const projectName = room.project?.name ?? (started ? "…" : "your project");
 
-  // round 1 + debate (2 turns each, 12 at most) + verdicts + summary
-  const needed = selected.length ? selected.length + Math.min(12, 2 * selected.length) + selected.length + 1 : 0;
+  // round 1 + debate (2 turns each, 12 at most) + verdicts + summary, plus one vision call per
+  // live-site screenshot described
+  const siteCalls = site.trim() ? (quota?.site_calls ?? 4) : 0;
+  const needed = selected.length ? selected.length + Math.min(12, 2 * selected.length) + selected.length + 1 + siteCalls : 0;
   const left = quota?.free_quota?.remaining ?? null;
   const short = left !== null && left < needed;
 
@@ -103,7 +106,7 @@ export default function Home() {
     setStartError(null);
     try {
       const { id } = await api.startReview(sample ? { sample: true, persona_ids: selected }
-                                                  : { repo_url: repo.trim(), demo, persona_ids: selected });
+                                                  : { repo_url: repo.trim(), site_url: site.trim(), demo, persona_ids: selected });
       setChat(null);
       setReviewId(id);
     } catch (e) {
@@ -200,7 +203,8 @@ export default function Home() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h1>Is {projectName} useful?</h1>
             <div className="mono" style={{ fontSize: 13, color: "var(--faint)", overflowWrap: "anywhere" }}>
-              {room.project ? `${room.project.repo_url} · ${room.project.files} files read · ${room.project.demo_steps ? `${room.project.demo_steps} demo steps` : "no demo"}`
+              {room.project ? `${room.project.repo_url} · ${room.project.files} files read · ${room.project.demo_steps ? `${room.project.demo_steps} demo steps` : "no demo"}` +
+                              (room.project.site_views ? ` · ${room.project.site_views} live site views` : "")
                             : "Give a GitHub link and a short walkthrough. The panel reads it, asks what is missing, debates, and decides."}
             </div>
             {loadError && <div className="form-error">{loadError}</div>}
@@ -235,6 +239,12 @@ export default function Home() {
                       <label htmlFor="repo" className="label">GitHub link</label>
                       <input id="repo" className="input" placeholder="https://github.com/you/repo" value={repo}
                              onChange={(e) => setRepo(e.target.value)} />
+                      <label htmlFor="site" className="label">Live site <span className="muted">(optional)</span></label>
+                      <input id="site" className="input" type="text" inputMode="url" autoComplete="url" spellCheck={false} placeholder="https://your-app.example.com"
+                             value={site} onChange={(e) => setSite(e.target.value)} aria-describedby="site-hint" />
+                      <span id="site-hint" className="muted" style={{ fontSize: 12 }}>
+                        Public pages only. The panel sees the first screen and up to 3 linked pages, on desktop and phone.
+                      </span>
                     </div>
                     <div className="field">
                       <label htmlFor="demo" className="label">Demo walkthrough</label>
@@ -247,9 +257,9 @@ export default function Home() {
                       {quota.demo_model
                         ? "Demo model: free and offline, opinions are canned."
                         : left !== null
-                          ? `Needs about ${needed} model requests · ${left} of ${quota.free_quota!.limit} free requests left today.` +
+                          ? `Needs about ${needed} model requests${siteCalls ? ` (${siteCalls} to read the live site)` : ""} · ${left} of ${quota.free_quota!.limit} free requests left today.` +
                             (short ? " Not enough: it would stop partway. Pick fewer reviewers or wait for the daily reset." : "")
-                          : `Needs about ${needed} model requests.`}
+                          : `Needs about ${needed} model requests${siteCalls ? ` (${siteCalls} to read the live site)` : ""}.`}
                     </div>
                   )}
                   {startError && <div className="form-error">{startError}</div>}

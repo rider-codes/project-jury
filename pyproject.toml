@@ -13,6 +13,7 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "fastapi>=0.162.5",
     "uvicorn[standard]>=0.54.0",
+    "playwright>=1.65.2",
 ]
 
 [dependency-groups]
