@@ -358,3 +358,12 @@
 .sc-page .sc-about-tag { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
                          color: var(--sc-on-accent); background: var(--sc-accent); border-radius: 999px; padding: 3px 10px; }
 .sc-page .sc-about-date { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+
+/* ---------- first-run fixes: labelled rail, loading text, phone order ---------- */
+.checking { margin: auto; font-size: 15px; }
+.sc-app .rail-btn { height: auto; min-height: 52px; padding: 6px 0; gap: 3px; text-decoration: none; grid-auto-flow: row; }
+.rail-label { font-size: 11px; font-weight: 700; line-height: 1; color: var(--text); }
+@media (max-width: 720px) {
+  .sc-app .rail-btn { width: 64px; min-height: 48px; }
+  .sc-app .who-pre { order: 1; }
+}

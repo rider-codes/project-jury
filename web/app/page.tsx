@@ -31,6 +31,8 @@ export default function Home() {
   const [chatPersona, setChatPersona] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [past, setPast] = useState<ReviewListItem[]>([]);
+  const [pastError, setPastError] = useState(false);
+  const [loadRun, setLoadRun] = useState(0); // bumped by Retry to load the reviewers again
   const [repo, setRepo] = useState("");
   const [site, setSite] = useState("");
   const [demo, setDemo] = useState("");
@@ -58,19 +60,22 @@ export default function Home() {
   // personas, and a review or chat from the URL
   useEffect(() => {
     if (access !== "open") return;
+    setLoadError(null);
     api.personas()
       .then((ps) => {
         setPersonas(ps);
         setSelected(ps.filter((p) => p.default).map((p) => p.id));
       })
-      .catch(() => setLoadError("Cannot reach the API. Start it with: uv run python -m jury.api"));
+      // a hosted visitor cannot start the API, so the command is only shown when developing
+      .catch(() => setLoadError("We couldn't reach the review service. Please try again in a moment." +
+        (process.env.NODE_ENV === "production" ? "" : " (Developing? Start it with: uv run python -m jury.api)")));
     api.quota().then(setQuota).catch(() => setQuota(null));
     const q = new URLSearchParams(window.location.search);
     if (q.get("review")) setReviewId(q.get("review"));
     if (q.get("chat")) {
       api.chat(q.get("chat")!).then((c) => { setChat(c); setMode("chat"); }).catch(() => setUrl({ chat: null }));
     }
-  }, [access]);
+  }, [access, loadRun]);
 
   // live event stream for the review on screen; replays from the start on reload
   useEffect(() => {
@@ -126,7 +131,12 @@ export default function Home() {
 
   const openDrawer = async () => {
     setDrawer((d) => !d);
-    try { setPast(await api.reviews()); } catch {}
+    try {
+      setPast(await api.reviews());
+      setPastError(false);
+    } catch {
+      setPastError(true);
+    }
   };
 
   const answer = useCallback(async (answers: Record<string, string>) => {
@@ -172,16 +182,24 @@ export default function Home() {
     setBarBusy(false);
   };
 
-  if (access === "checking") return <div className={`shell sc-page${dark ? " dark" : ""}`} aria-busy="true" />;
+  // checking: the app is not drawn yet (see above), but the visitor is told something is happening
+  if (access === "checking") {
+    return (
+      <div className={`shell sc-page${dark ? " dark" : ""}`} aria-busy="true">
+        <p className="checking muted" role="status">Checking access…</p>
+      </div>
+    );
+  }
   if (access === "locked") return <Showcase />;
   if (home) return <Showcase signedIn />;
 
   return (
     <div className={`shell sc-page sc-app${dark ? " dark" : ""}`}>
       <nav className="rail" aria-label="Main">
-        <a className="rail-btn" href="/?view=home" aria-label="Dashboard" title="Back to the dashboard">{Icon.home}</a>
-        <button type="button" className="rail-btn primary" aria-label="New review" title="New review" onClick={newReview}>{Icon.plus()}</button>
-        <button type="button" className="rail-btn" aria-label="Past reviews" title="Past reviews" aria-expanded={drawer} onClick={openDrawer}>{Icon.history}</button>
+        {/* labelled, and none styled as the primary action: on the start screen that is "Start review" */}
+        <a className="rail-btn" href="/?view=home" title="Back to the dashboard">{Icon.home}<span className="rail-label">Home</span></a>
+        <button type="button" className="rail-btn" title="New review" onClick={newReview}>{Icon.plus("currentColor")}<span className="rail-label">New</span></button>
+        <button type="button" className="rail-btn" title="Past reviews" aria-expanded={drawer} onClick={openDrawer}>{Icon.history}<span className="rail-label">Past</span></button>
       </nav>
 
       {drawer && (
@@ -190,7 +208,8 @@ export default function Home() {
             <h2>Past reviews</h2>
             <button type="button" className="link-btn" onClick={() => setDrawer(false)}>Close</button>
           </div>
-          {past.length === 0 && <p className="muted">No reviews yet.</p>}
+          {pastError && <p className="form-error" role="alert">Could not load past reviews. Close this and try again.</p>}
+          {!pastError && past.length === 0 && <p className="muted">No reviews yet.</p>}
           {past.map((r) => (
             <button key={r.id} type="button" className="drawer-item"
                     onClick={() => { setDrawer(false); setMode("room"); setChat(null); setReviewId(r.id); }}>
@@ -229,7 +248,12 @@ export default function Home() {
                               (room.project.site_views ? ` · ${room.project.site_views} live site views` : "")
                             : "Give a GitHub link and a short walkthrough. The panel reads it, asks what is missing, debates, and decides."}
             </div>
-            {loadError && <div className="form-error">{loadError}</div>}
+            {loadError && (
+              <div className="row" role="alert">
+                <span className="form-error">{loadError}</span>
+                <button type="button" className="btn ghost" onClick={() => setLoadRun((n) => n + 1)}>Retry</button>
+              </div>
+            )}
           </div>
 
           {mode === "chat" ? (
@@ -237,7 +261,8 @@ export default function Home() {
                       chat={chat} setChat={setChat} initialPersona={chatPersona} />
           ) : (
             <>
-              <section className="section" aria-labelledby="who">
+              {/* who-pre: at phone width the start form goes above the reviewers, so "Start review" is not buried */}
+              <section className={`section${started ? "" : " who-pre"}`} aria-labelledby="who">
                 <div className="section-head">
                   <div className="row" style={{ alignItems: "baseline", gap: 14 }}>
                     <h2 id="who">Who is in the room?</h2>
@@ -289,7 +314,10 @@ export default function Home() {
                     <button type="submit" className="btn" disabled={starting || !repo.trim() || !selected.length}>
                       {starting ? "Starting…" : "Start review"}
                     </button>
-                    <span className="muted" style={{ fontSize: 13 }}>Public repos only. A review takes 1 to 3 minutes.</span>
+                    <button type="button" className="btn ghost" disabled={starting || !selected.length} onClick={() => start(true)}>
+                      Try the sample project
+                    </button>
+                    <span className="muted" style={{ fontSize: 13 }}>Free. Public repos only. A review takes 1 to 3 minutes. No repo yet? The sample runs a full review.</span>
                   </div>
                 </form>
               )}

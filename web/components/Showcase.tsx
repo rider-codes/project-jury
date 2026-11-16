@@ -132,8 +132,14 @@ export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
             </p>
             <div className="row">
               <button type="button" className="btn" onClick={watch}>Watch a real review</button>
+              <a className="btn ghost" href={signedIn ? "/" : "#access"} style={{ display: "inline-grid", placeItems: "center", textDecoration: "none" }}>
+                Review your own project
+              </a>
               <a className="link-btn" href="#how" style={{ color: "var(--text)" }}>How it works</a>
             </div>
+            <span className="muted" style={{ fontSize: 14 }}>
+              Free. Works with public GitHub repos. {signedIn ? "A review takes 1 to 3 minutes." : "Running your own review needs an access code, which you can request."}
+            </span>
             {rec && <HeroArt personas={rec.personas} />}
           </section>
 
@@ -204,6 +210,17 @@ export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
               </span>
             </div>
             {started && <RoomView room={room} names={names} personas={rec?.personas ?? []} onAnswer={async () => {}} readOnly compact />}
+            {pos >= total && total > 0 && (
+              <div className="sc-about">
+                <span className="sc-about-tag">Your turn</span>
+                <p>That was one project. The same panel can read yours and tell you what it finds.</p>
+                <div className="row">
+                  <a className="btn" href={signedIn ? "/" : "#access"} style={{ display: "inline-grid", placeItems: "center", textDecoration: "none" }}>
+                    Now review your project
+                  </a>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="section" id="access" style={{ alignItems: "flex-start" }}>
