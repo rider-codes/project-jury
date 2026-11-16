@@ -75,7 +75,8 @@ class LLM:
         provider = os.environ.get("JURY_PROVIDER", "openrouter")
         if provider not in PROVIDERS:
             raise LLMError(f"unknown provider: {provider}")
-        key = os.environ.get(PROVIDERS[provider][1], "")
+        # stripped: a key pasted into a host's dashboard with a trailing newline is an illegal header value
+        key = os.environ.get(PROVIDERS[provider][1], "").strip()
         if not key:
             raise LLMError(f"{PROVIDERS[provider][1]} is not set (see .env.example)")
         models = {t: os.environ.get(f"JURY_MODEL_{t.value.upper()}", "") for t in Tier}

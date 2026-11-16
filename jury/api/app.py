@@ -36,6 +36,7 @@ from jury.chat.session import ChatSession
 from jury.chat.store import ChatStore
 from jury.ingest.site_log import vision_calls
 from jury.personas import load_all
+from jury.redact import redact
 from jury.room.retry import needed
 from jury.room.state import DEFAULT_ROOM
 
@@ -306,7 +307,7 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         except ValueError as e:
             raise HTTPException(422, str(e))
         except Exception as e:
-            raise HTTPException(502, f"the model did not answer: {e}"[:400])
+            raise HTTPException(502, redact(f"the model did not answer: {e}")[:400])
         chats.save(s)
         return reply
 

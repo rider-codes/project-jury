@@ -10,6 +10,8 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
+from jury.redact import redact
+
 SCHEMA = [
     """CREATE TABLE IF NOT EXISTS reviews (
         id TEXT PRIMARY KEY,
@@ -69,7 +71,8 @@ class ReviewStore:
         with self._db() as db, db:
             (last,) = db.execute("SELECT COALESCE(MAX(seq), 0) FROM review_events WHERE review_id = ?",
                                  (review_id,)).fetchone()
-            db.execute("INSERT INTO review_events VALUES (?, ?, ?)", (review_id, last + 1, json.dumps(event)))
+            # redacted: an error event can carry text from a failed request, and the log is shown on the page
+            db.execute("INSERT INTO review_events VALUES (?, ?, ?)", (review_id, last + 1, redact(json.dumps(event))))
         return last + 1
 
     def events_after(self, review_id: str, after: int = 0) -> list[tuple[int, dict]]:
