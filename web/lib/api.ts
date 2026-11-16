@@ -8,6 +8,8 @@ export const API =
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...init,
+    // `npm run dev` is on another port than the API, so the access cookie must be sent explicitly
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
   if (!res.ok) {

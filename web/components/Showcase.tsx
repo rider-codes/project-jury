@@ -40,13 +40,13 @@ function findings(rec: Recording): string[] {
 /** Headline numbers, counted from the recording itself. */
 function stats(rec: Recording): [string, string][] {
   const ev = rec.events as any[];
-  const reviewers = ev.filter((e) => e.type === "impression").length;
   const claims = ev.reduce((n, e) =>
     n + (e.type === "impression" || e.type === "debate_turn" ? e.claims.length : e.type === "verdict" ? e.reasons.length : 0), 0);
   const turns = ev.filter((e) => e.type === "debate_turn").length;
   const usage = ev.find((e) => e.type === "usage");
   return [
-    [String(reviewers), "reviewers in the room"],
+    // the panel a visitor can pick from, not the four who happened to sit in the recorded room
+    [String(rec.personas.length), `reviewers to pick from, up to ${rec.personas.length} in a room`],
     [String(claims), "claims, each checked against the files"],
     [String(turns), "debate turns, picked by the moderator"],
     [usage ? String(usage.calls) : "–", "model calls on free models"],

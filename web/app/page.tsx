@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ChatView } from "@/components/ChatView";
+import { Dropdown } from "@/components/Dropdown";
 import { Showcase } from "@/components/Showcase";
 import { PersonaPicker } from "@/components/PersonaPicker";
 import { RoomView } from "@/components/RoomView";
@@ -19,6 +20,10 @@ function setUrl(params: Record<string, string | null>) {
   window.history.replaceState(null, "", url);
 }
 
+/** Model requests a room of n reviewers makes: first impressions, up to 2 debate turns each
+ *  (12 at most), verdicts, and the summary. */
+const costFor = (n: number) => n + Math.min(12, 2 * n) + n + 1;
+
 export default function Home() {
   const [dark, pickTheme] = useTheme();
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -32,6 +37,8 @@ export default function Home() {
   const [drawer, setDrawer] = useState(false);
   const [past, setPast] = useState<ReviewListItem[]>([]);
   const [pastError, setPastError] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
+  const costRef = useRef<HTMLDivElement>(null);
   const [loadRun, setLoadRun] = useState(0); // bumped by Retry to load the reviewers again
   const [repo, setRepo] = useState("");
   const [site, setSite] = useState("");
@@ -69,7 +76,6 @@ export default function Home() {
       // a hosted visitor cannot start the API, so the command is only shown when developing
       .catch(() => setLoadError("We couldn't reach the review service. Please try again in a moment." +
         (process.env.NODE_ENV === "production" ? "" : " (Developing? Start it with: uv run python -m jury.api)")));
-    api.quota().then(setQuota).catch(() => setQuota(null));
     const q = new URLSearchParams(window.location.search);
     if (q.get("review")) setReviewId(q.get("review"));
     if (q.get("chat")) {
@@ -77,12 +83,29 @@ export default function Home() {
     }
   }, [access, loadRun]);
 
+  // today's free requests, for the meter and the start form; read again whenever a review
+  // starts, pauses or ends, since that is when the number has moved
+  useEffect(() => {
+    if (access !== "open") return;
+    api.quota().then(setQuota).catch(() => setQuota(null));
+  }, [access, loadRun, room.status]);
+
+  // the cost panel closes on Escape or a click outside it
+  useEffect(() => {
+    if (!costOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCostOpen(false); };
+    const onDown = (e: MouseEvent) => { if (!costRef.current?.contains(e.target as Node)) setCostOpen(false); };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
+  }, [costOpen]);
+
   // live event stream for the review on screen; replays from the start on reload
   useEffect(() => {
     if (!reviewId) return;
     dispatch({ type: "reset", personaIds: [] });
     setUrl({ review: reviewId });
-    const es = new EventSource(api.eventsUrl(reviewId));
+    const es = new EventSource(api.eventsUrl(reviewId), { withCredentials: true });
     es.onmessage = (m) => dispatch({ type: "event", event: JSON.parse(m.data) });
     es.addEventListener("end", () => es.close());
     return () => es.close();
@@ -100,7 +123,7 @@ export default function Home() {
   // round 1 + debate (2 turns each, 12 at most) + verdicts + summary, plus one vision call per
   // live-site screenshot described
   const siteCalls = site.trim() ? (quota?.site_calls ?? 4) : 0;
-  const needed = selected.length ? selected.length + Math.min(12, 2 * selected.length) + selected.length + 1 + siteCalls : 0;
+  const needed = selected.length ? costFor(selected.length) + siteCalls : 0;
   const left = quota?.free_quota?.remaining ?? null;
   const short = left !== null && left < needed;
 
@@ -182,6 +205,47 @@ export default function Home() {
     setBarBusy(false);
   };
 
+  // what the review on the form costs; shown in the panel that opens from the meter
+  const costGuide = quota && !quota.demo_model ? (
+    <div className={`cost${short ? " short" : ""}`} aria-label="What this review costs">
+      <div className="cost-head">
+        <strong>{selected.length ? `This review needs about ${needed} requests` : "Pick at least one reviewer"}</strong>
+        {left !== null && <span className="muted">You have {left} of {quota.free_quota!.limit} left today</span>}
+      </div>
+      {selected.length > 0 && (
+        <div className="cost-parts">
+          <span><b>{selected.length}</b> first impressions</span>
+          <span><b>up to {Math.min(12, 2 * selected.length)}</b> debate turns</span>
+          <span><b>{selected.length}</b> verdicts</span>
+          <span><b>1</b> summary</span>
+          {siteCalls > 0 && <span><b>up to {siteCalls}</b> to read the live site</span>}
+        </div>
+      )}
+      {short && (
+        <div className="form-error" role="alert">
+          Not enough left: the review would stop partway. Pick fewer reviewers or wait for the daily reset.
+        </div>
+      )}
+      <div className="cost-ref">
+        <span className="cost-ref-title">By room size</span>
+        {personas.map((_, i) => {
+          const n = i + 1;
+          const c = costFor(n) + siteCalls;
+          return (
+            <span key={n} className={`cost-chip${n === selected.length ? " on" : ""}${left !== null && c > left ? " over" : ""}`}
+                  title={left !== null && c > left ? "More than you have left today" : undefined}>
+              {n} {n === 1 ? "reviewer" : "reviewers"} · {c}
+            </span>
+          );
+        })}
+      </div>
+      <div className="muted" style={{ fontSize: 12 }}>
+        A live site adds up to {quota.site_calls ?? 4}. Asking one reviewer a question afterwards costs about 1 each.
+        The sample project costs the same as a real one.
+      </div>
+    </div>
+  ) : null;
+
   // checking: the app is not drawn yet (see above), but the visitor is told something is happening
   if (access === "checking") {
     return (
@@ -233,6 +297,21 @@ export default function Home() {
               )}
             </div>
             <div className="row">
+              {quota?.free_quota && left !== null && (
+                <div className="quota-wrap" ref={costRef}>
+                  <button type="button" className={`quota-meter ${left > needed ? "ok" : left === needed ? "exact" : "low"}`} aria-expanded={costOpen}
+                          aria-controls="cost-panel" onClick={() => setCostOpen((o) => !o)}
+                          title={`The review on the form needs about ${needed}. Green: more than enough. Black: exactly enough. Red: not enough.`}>
+                    <span className="quota-num">{left} / {quota.free_quota.limit}</span>
+                    <div className="quota-bar" role="meter" aria-label="Free model requests left today"
+                         aria-valuemin={0} aria-valuemax={quota.free_quota.limit} aria-valuenow={left}>
+                      <div style={{ width: `${Math.max(0, Math.min(100, (left / (quota.free_quota.limit || 1)) * 100))}%` }} />
+                    </div>
+                    <span className="quota-label">requests left today · what does a review cost?</span>
+                  </button>
+                  {costOpen && <div id="cost-panel" className="cost-pop">{costGuide}</div>}
+                </div>
+              )}
               <ThemeSwitch dark={dark} onPick={pickTheme} />
               <div className="toggle" role="group" aria-label="Mode">
                 <button type="button" aria-pressed={mode === "room"} onClick={() => setMode("room")}>Room</button>
@@ -299,16 +378,10 @@ export default function Home() {
                                 placeholder={"1. Open the app\n2. Click Start\n3. What you see"} />
                     </div>
                   </div>
-                  {quota && (
-                    <div className={short ? "form-error" : "muted"} style={{ fontSize: 13 }} role={short ? "alert" : undefined}>
-                      {quota.demo_model
-                        ? "Demo model: free and offline, opinions are canned."
-                        : left !== null
-                          ? `Needs about ${needed} model requests${siteCalls ? ` (${siteCalls} to read the live site)` : ""} · ${left} of ${quota.free_quota!.limit} free requests left today.` +
-                            (short ? " Not enough: it would stop partway. Pick fewer reviewers or wait for the daily reset." : "")
-                          : `Needs about ${needed} model requests${siteCalls ? ` (${siteCalls} to read the live site)` : ""}.`}
-                    </div>
+                  {quota?.demo_model && (
+                    <div className="muted" style={{ fontSize: 13 }}>Demo model: free and offline, opinions are canned.</div>
                   )}
+                  {/* what a review costs is shown by the meter in the top bar, not here */}
                   {startError && <div className="form-error">{startError}</div>}
                   <div className="row">
                     <button type="submit" className="btn" disabled={starting || !repo.trim() || !selected.length}>
@@ -331,14 +404,14 @@ export default function Home() {
                     <input id="msg" className="input" value={barText} onChange={(e) => setBarText(e.target.value)}
                            disabled={(!live && room.status !== "done") || barBusy} maxLength={live ? 2000 : 4000}
                            placeholder={live ? "Say something to the room…" : room.status === "done" ? "Ask one reviewer about their verdict…" : "The debate is over. You can ask a reviewer when the verdicts are in"} />
-                    <label htmlFor="to" className="sr">Send to</label>
-                    <select id="to" className="select" value={to} onChange={(e) => { setTo(e.target.value); setChatPersona(e.target.value); }}
-                            disabled={!live && room.status !== "done"}>
-                      <option value="">{live ? "To: Everyone" : "To: pick a reviewer"}</option>
-                      {room.personaIds.filter((p) => live ? room.personaState[p] !== "error" : room.verdicts.some((v) => v.persona_id === p)).map((p) => (
-                        <option key={p} value={p}>To: {names[p]}</option>
-                      ))}
-                    </select>
+                    <Dropdown label="Send to" value={to} disabled={!live && room.status !== "done"}
+                              onChange={(v) => { setTo(v); setChatPersona(v); }}
+                              options={[
+                                { value: "", label: live ? "To: Everyone" : "To: pick a reviewer" },
+                                ...room.personaIds
+                                  .filter((p) => live ? room.personaState[p] !== "error" : room.verdicts.some((v) => v.persona_id === p))
+                                  .map((p) => ({ value: p, label: `To: ${names[p]}` })),
+                              ]} />
                     <button type="submit" className="send" aria-label="Send"
                             disabled={barBusy || !barText.trim() || (live ? false : room.status !== "done" || !to)}>
                       {Icon.send}

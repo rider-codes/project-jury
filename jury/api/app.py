@@ -99,6 +99,7 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
     app.add_middleware(
         CORSMiddleware,
         allow_origins=os.environ.get("JURY_WEB_ORIGIN", "http://localhost:3000").split(","),
+        allow_credentials=True,  # the dev page on :3000 sends the access cookie to the API on :8000
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )

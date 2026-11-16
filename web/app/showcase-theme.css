@@ -367,3 +367,55 @@
   .sc-app .rail-btn { width: 64px; min-height: 48px; }
   .sc-app .who-pre { order: 1; }
 }
+
+/* ---------- credits meter in the top bar ---------- */
+.quota-meter { display: grid; grid-template-columns: auto 72px; align-items: center; column-gap: 10px; row-gap: 2px;
+               padding: 6px 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--panel); }
+.quota-num { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.quota-bar { height: 8px; border-radius: 999px; background: var(--line-2); overflow: hidden; }
+.quota-bar > div { height: 100%; border-radius: 999px; background: var(--sc-accent); transition: width 0.3s; }
+.quota-label { grid-column: 1 / -1; font-size: 11px; color: var(--muted); line-height: 1.2; }
+.quota-meter.low { border-color: var(--not-useful); }
+.quota-meter.low .quota-bar > div { background: var(--not-useful); }
+.quota-meter.low .quota-num { color: var(--not-useful); }
+
+/* ---------- what a review costs, on the start form ---------- */
+.cost { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--bg); font-size: 13px; }
+.cost.short { border-color: var(--not-useful); }
+.cost-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.cost-head strong { font-size: 15px; color: var(--text); }
+.cost-parts { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); }
+.cost-parts b { color: var(--text); font-family: var(--mono); }
+.cost-ref { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cost-ref-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.cost-chip { font-family: var(--mono); font-size: 12px; padding: 4px 9px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--muted); white-space: nowrap; }
+.cost-chip.on { border-color: var(--sc-accent); color: var(--text); font-weight: 700; box-shadow: inset 0 0 0 1px var(--sc-accent); }
+.cost-chip.over { color: var(--not-useful); border-color: var(--not-useful); text-decoration: line-through; }
+
+/* ---------- the cost guide opens from the meter ---------- */
+.quota-wrap { position: relative; }
+button.quota-meter { cursor: pointer; text-align: left; font: inherit; }
+button.quota-meter:hover { border-color: var(--text); }
+.cost-pop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: min(440px, calc(100vw - 32px)); border: 2px solid var(--edge); border-radius: 16px; background: var(--panel); box-shadow: 4px 4px 0 var(--shadow-hard); }
+.cost-pop .cost { border: none; background: transparent; }
+@media (max-width: 720px) { .cost-pop { right: auto; left: 0; } }
+
+/* meter colour against what the review on the form needs: green = more than enough,
+   black = exactly enough, red (.low, above) = not enough */
+.quota-meter.ok { border-color: var(--useful); }
+.quota-meter.ok .quota-num { color: var(--useful); }
+.quota-meter.ok .quota-bar > div { background: var(--useful); }
+.quota-meter.exact { border-color: var(--text); }
+.quota-meter.exact .quota-num { color: var(--text); }
+.quota-meter.exact .quota-bar > div { background: var(--text); }
+
+/* ---------- dropdown in the app's own style (replaces the native select list) ---------- */
+.dd { position: relative; flex: none; }
+.dd-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 0 14px 0 16px; border: 2px solid var(--edge); border-radius: 12px; background: var(--bg); color: var(--text); font: inherit; font-size: 15px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.dd-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.dd-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.dd-list { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 30; min-width: 100%; margin: 0; padding: 6px; list-style: none; border: 2px solid var(--edge); border-radius: 14px; background: var(--panel); box-shadow: 4px 4px 0 var(--shadow-hard); }
+.dd-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; padding: 0 12px; border-radius: 9px; font-size: 15px; color: var(--text); white-space: nowrap; cursor: pointer; }
+.dd-item.active { background: var(--bg); }
+.dd-item[aria-selected="true"] { font-weight: 700; color: var(--sc-accent); }
+@media (max-width: 720px) { .sc-app .bar .dd { flex: 1 1 auto; } .dd-btn { width: 100%; } }
