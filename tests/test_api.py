@@ -279,3 +279,14 @@ def test_builder_can_talk_to_the_room_mid_debate(tmp_path):
         assert not [e for e in events if e["type"] == "user_message_missed"]
         # once the review is over the room is closed
         assert c.post(f"/api/reviews/{rid}/messages", json={"text": "late"}).status_code == 409
+
+
+def test_chat_about_a_repo_without_a_review(client):
+    """One-on-one takes a GitHub link directly; it must not fall back to the sample project."""
+    chat = client.post("/api/chats", json={"persona_id": "hiring_manager", "repo_url": "https://github.com/o/widget"})
+    assert chat.status_code == 201 and chat.json()["project_name"] == "widget"
+
+    broken = client.post("/api/chats", json={"persona_id": "hiring_manager", "repo_url": "https://github.com/o/broken"})
+    assert broken.status_code == 422 and "private repos" in broken.json()["detail"]
+
+    assert client.post("/api/chats", json={"persona_id": "hiring_manager"}).status_code == 422

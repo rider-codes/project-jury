@@ -20,6 +20,7 @@ export function ChatView({ personas, reviewId, reviewDone, chat, setChat, initia
   const [persona, setPersona] = useState<string>(initialPersona ?? personas[0]?.id ?? "senior_engineer");
   const [withHistory, setWithHistory] = useState(false); // the plan's default is a clean start
   const [text, setText] = useState("");
+  const [repo, setRepo] = useState(""); // with no review on screen: the project to talk about
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -29,13 +30,13 @@ export function ChatView({ personas, reviewId, reviewDone, chat, setChat, initia
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [chat?.messages.length]);
 
-  const start = async () => {
+  const start = async (sample = false) => {
     setBusy(true);
     setError(null);
     try {
       setChat(await api.startChat(reviewId
         ? { persona_id: persona, review_id: reviewId, with_history: withHistory && reviewDone }
-        : { persona_id: persona, sample: true }));
+        : sample ? { persona_id: persona, sample: true } : { persona_id: persona, repo_url: repo.trim() }));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -70,8 +71,18 @@ export function ChatView({ personas, reviewId, reviewDone, chat, setChat, initia
         <div className="inputs">
           <div className="body">
             {p?.name} will answer &ldquo;{p?.verdict_question}&rdquo; about{" "}
-            {reviewId ? "the project in this review" : "the sample project (start a review first to chat about your own)"}.
+            {reviewId ? "the project in this review" : "the project you give below"}.
           </div>
+          {!reviewId && (
+            <div className="field" style={{ flex: "none" }}>
+              <label htmlFor="chat-repo" className="label">GitHub link</label>
+              <input id="chat-repo" className="input" placeholder="https://github.com/you/repo" value={repo}
+                     onChange={(e) => setRepo(e.target.value)} disabled={busy} />
+              <span className="muted" style={{ fontSize: 12 }}>
+                Public repos only. Reading it is free; each message you send costs about 1 request.
+              </span>
+            </div>
+          )}
           {reviewId && (
             <label className="check-row">
               <input type="checkbox" checked={withHistory} disabled={!reviewDone}
@@ -80,7 +91,14 @@ export function ChatView({ personas, reviewId, reviewDone, chat, setChat, initia
             </label>
           )}
           {error && <div className="form-error">{error}</div>}
-          <div className="row"><button className="btn" type="button" onClick={start} disabled={busy}>Start chat</button></div>
+          <div className="row">
+            <button className="btn" type="button" onClick={() => start()} disabled={busy || (!reviewId && !repo.trim())}>
+              {busy ? (reviewId ? "Starting…" : "Reading the project…") : "Start chat"}
+            </button>
+            {!reviewId && (
+              <button className="btn ghost" type="button" onClick={() => start(true)} disabled={busy}>Use the sample project instead</button>
+            )}
+          </div>
         </div>
       </section>
     );

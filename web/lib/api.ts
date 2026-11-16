@@ -42,7 +42,7 @@ export const api = {
   answer: (id: string, answers: Record<string, string>) => post<{ ok: true }>(`/api/reviews/${id}/answers`, { answers }),
   say: (id: string, to: string, text: string) => post<{ ok: true }>(`/api/reviews/${id}/messages`, { to, text }),
   retry: (id: string) => post<{ impressions: string[]; verdicts: string[]; summary: boolean }>(`/api/reviews/${id}/retry`, {}),
-  startChat: (body: { persona_id: string; review_id?: string; with_history?: boolean; sample?: boolean }) =>
+  startChat: (body: { persona_id: string; review_id?: string; with_history?: boolean; sample?: boolean; repo_url?: string }) =>
     post<Chat>("/api/chats", body),
   chat: (id: string) => call<Chat>(`/api/chats/${id}`),
   sendChat: (id: string, text: string) => post<ChatMessage>(`/api/chats/${id}/messages`, { text }),

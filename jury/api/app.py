@@ -69,6 +69,7 @@ class NewChat(BaseModel):
     review_id: str | None = None
     with_history: bool = False  # default is a clean start, per the plan
     sample: bool = False
+    repo_url: str = Field("", max_length=500)  # talk about a repo without running a room first
 
 
 class ChatMessage(BaseModel):
@@ -277,11 +278,20 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
             session = ChatSession(persona_id=body.persona_id, brief=brief,
                                   room_thread=body.review_id if body.with_history else None,
                                   room_context=context if body.with_history else "")
+        elif body.repo_url.strip():
+            # reading the repo makes no model request, so this costs nothing until the first message
+            from jury.ingest.github import IngestError
+            try:
+                brief = await asyncio.to_thread(runner.brief_builder, body.repo_url.strip(), "",
+                                                os.environ.get("GITHUB_TOKEN") or None)
+            except IngestError as e:
+                raise HTTPException(422, redact(str(e)))
+            session = ChatSession(persona_id=body.persona_id, brief=brief.model_dump())
         elif body.sample:
             session = ChatSession(persona_id=body.persona_id,
                                   brief=json.loads(SAMPLE_BRIEF.read_text(encoding="utf-8")))
         else:
-            raise HTTPException(422, "give a review_id, or use the sample project")
+            raise HTTPException(422, "give a review_id or a GitHub link, or use the sample project")
         chats.save(session)
         return chat_view(session)
 
