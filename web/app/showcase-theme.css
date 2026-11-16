@@ -349,3 +349,12 @@
   .sc-app .bar .select { flex: 1 1 auto; }
   .sc-app .retry .btn, .sc-app .report-actions .btn { flex: 1 1 100%; }
 }
+
+/* the note above the replay: what was reviewed, on which models, and when */
+.sc-page .sc-about { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; max-width: 860px;
+                     background: var(--panel); border: 2px solid var(--edge); border-left: 8px solid var(--sc-accent);
+                     border-radius: 14px; padding: 16px 20px; box-shadow: 4px 4px 0 var(--shadow-hard); }
+.sc-page .sc-about p { margin: 0; font-size: 17px; line-height: 1.55; font-weight: 600; color: var(--text); }
+.sc-page .sc-about-tag { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+                         color: var(--sc-on-accent); background: var(--sc-accent); border-radius: 999px; padding: 3px 10px; }
+.sc-page .sc-about-date { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }

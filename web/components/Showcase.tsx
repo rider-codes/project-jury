@@ -186,7 +186,13 @@ export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
               <div><span className="sc-kicker">04 / Proof</span><h2 id="replay-h">A real review, replayed</h2></div>
               <div className="pill">{pos >= total && total ? "Review complete" : ROUND_LABEL[room.round]}</div>
             </div>
-            {rec && <p className="muted" style={{ margin: 0, fontSize: 14 }}>{rec.about} Recorded {rec.recorded}.</p>}
+            {rec && (
+              <div className="sc-about">
+                <span className="sc-about-tag">About this run</span>
+                <p>{rec.about}</p>
+                <span className="sc-about-date">Recorded {rec.recorded}</span>
+              </div>
+            )}
             <div className="row">
               <button type="button" className="btn" onClick={() => (playing ? setPlaying(false) : pos >= total ? restart() : setPlaying(true))} disabled={!rec}>
                 {playing ? "Pause" : pos >= total && total ? "Replay" : started ? "Resume" : "Play"}
