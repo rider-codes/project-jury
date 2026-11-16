@@ -125,7 +125,9 @@ export default function Home() {
   const siteCalls = site.trim() ? (quota?.site_calls ?? 4) : 0;
   const needed = selected.length ? costFor(selected.length) + siteCalls : 0;
   const left = quota?.free_quota?.remaining ?? null;
-  const short = left !== null && left < needed;
+  // what the meter measures against: the review on the form, or one message in one-on-one
+  const meterNeed = mode === "chat" ? 1 : needed;
+  const short = left !== null && left < meterNeed;
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -206,7 +208,18 @@ export default function Home() {
   };
 
   // what the review on the form costs; shown in the panel that opens from the meter
-  const costGuide = !quota?.demo_model ? (
+  const costGuide = quota?.demo_model ? null : mode === "chat" ? (
+    <div className={`cost${short ? " short" : ""}`} aria-label="What a one-on-one message costs">
+      <div className="cost-head">
+        <strong>Each message needs about 1 request</strong>
+        {left !== null && <span className="muted">You have {left} of {quota!.free_quota!.limit} left today</span>}
+      </div>
+      <div className="muted" style={{ fontSize: 12 }}>
+        One-on-one is the cheap way to ask a single reviewer. A full room review needs about {costFor(4)} for four reviewers; switch to Room to see the breakdown.
+      </div>
+      {short && <div className="form-error" role="alert">None left today. Wait for the daily reset.</div>}
+    </div>
+  ) : (
     <div className={`cost${short ? " short" : ""}`} aria-label="What this review costs">
       <div className="cost-head">
         <strong>{selected.length ? `This review needs about ${needed} requests` : "Pick at least one reviewer"}</strong>
@@ -244,7 +257,7 @@ export default function Home() {
         The sample project costs the same as a real one.
       </div>
     </div>
-  ) : null;
+  );
 
   // checking: the app is not drawn yet (see above), but the visitor is told something is happening
   if (access === "checking") {
@@ -302,10 +315,10 @@ export default function Home() {
               {!quota?.demo_model && (
                 <div className="quota-wrap" ref={costRef}>
                   <button type="button" aria-expanded={costOpen} aria-controls="cost-panel" onClick={() => setCostOpen((o) => !o)}
-                          className={`quota-meter ${left === null ? "unknown" : left > needed ? "ok" : left === needed ? "exact" : "low"}`}
+                          className={`quota-meter ${left === null ? "unknown" : left > meterNeed ? "ok" : left === meterNeed ? "exact" : "low"}`}
                           title={left === null
                             ? "What the review on the form needs. How many requests you have left is not available on this deployment."
-                            : `The review on the form needs about ${needed}. Green: more than enough. Black: exactly enough. Red: not enough.`}>
+                            : `${mode === "chat" ? "A one-on-one message needs about 1" : `The review on the form needs about ${needed}`}. Green: more than enough. Black: exactly enough. Red: not enough.`}>
                     {left !== null && quota?.free_quota ? (
                       <>
                         <span className="quota-num">{left} / {quota.free_quota.limit}</span>
@@ -317,7 +330,7 @@ export default function Home() {
                       </>
                     ) : (
                       <>
-                        <span className="quota-num">about {needed}</span>
+                        <span className="quota-num">about {meterNeed}</span>
                         <span className="quota-label">requests needed</span>
                       </>
                     )}
