@@ -419,3 +419,16 @@ button.quota-meter:hover { border-color: var(--text); }
 .dd-item.active { background: var(--bg); }
 .dd-item[aria-selected="true"] { font-weight: 700; color: var(--sc-accent); }
 @media (max-width: 720px) { .sc-app .bar .dd { flex: 1 1 auto; } .dd-btn { width: 100%; } }
+
+/* New keeps its blue tile; the label sits under it */
+.sc-app .rail-btn .rail-plus { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--sc-accent); border: 2px solid var(--edge); box-shadow: 3px 3px 0 var(--shadow-hard); }
+.sc-app .rail-btn .rail-plus svg { stroke: var(--sc-on-accent); }
+@media (max-width: 720px) { .sc-app .rail-btn .rail-plus { width: 38px; height: 38px; border-radius: 12px; } }
+/* meter with no remaining count: one column, neutral */
+.quota-meter.unknown { grid-template-columns: auto; }
+
+/* keep the meter, theme switch and mode toggle on the top row: the left side gives way first */
+.sc-app .topbar-left { flex: 1 1 240px; min-width: 0; flex-wrap: nowrap; }
+.sc-app .topbar-left .crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-app .topbar > .row:last-child { flex-wrap: nowrap; }
+@media (max-width: 720px) { .sc-app .topbar-left, .sc-app .topbar > .row:last-child { flex-wrap: wrap; } }

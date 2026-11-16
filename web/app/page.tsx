@@ -206,11 +206,11 @@ export default function Home() {
   };
 
   // what the review on the form costs; shown in the panel that opens from the meter
-  const costGuide = quota && !quota.demo_model ? (
+  const costGuide = !quota?.demo_model ? (
     <div className={`cost${short ? " short" : ""}`} aria-label="What this review costs">
       <div className="cost-head">
         <strong>{selected.length ? `This review needs about ${needed} requests` : "Pick at least one reviewer"}</strong>
-        {left !== null && <span className="muted">You have {left} of {quota.free_quota!.limit} left today</span>}
+        {left !== null && <span className="muted">You have {left} of {quota!.free_quota!.limit} left today</span>}
       </div>
       {selected.length > 0 && (
         <div className="cost-parts">
@@ -240,7 +240,7 @@ export default function Home() {
         })}
       </div>
       <div className="muted" style={{ fontSize: 12 }}>
-        A live site adds up to {quota.site_calls ?? 4}. Asking one reviewer a question afterwards costs about 1 each.
+        A live site adds up to {quota?.site_calls ?? 4}. Asking one reviewer a question afterwards costs about 1 each.
         The sample project costs the same as a real one.
       </div>
     </div>
@@ -260,9 +260,9 @@ export default function Home() {
   return (
     <div className={`shell sc-page sc-app${dark ? " dark" : ""}`}>
       <nav className="rail" aria-label="Main">
-        {/* labelled, and none styled as the primary action: on the start screen that is "Start review" */}
+        {/* every button carries a visible label; New keeps its blue tile */}
         <a className="rail-btn" href="/?view=home" title="Back to the dashboard">{Icon.home}<span className="rail-label">Home</span></a>
-        <button type="button" className="rail-btn" title="New review" onClick={newReview}>{Icon.plus("currentColor")}<span className="rail-label">New</span></button>
+        <button type="button" className="rail-btn" title="New review" onClick={newReview}><span className="rail-plus">{Icon.plus()}</span><span className="rail-label">New</span></button>
         <button type="button" className="rail-btn" title="Past reviews" aria-expanded={drawer} onClick={openDrawer}>{Icon.history}<span className="rail-label">Past</span></button>
       </nav>
 
@@ -287,7 +287,7 @@ export default function Home() {
       <main className="main">
         <div className="column">
           <div className="topbar">
-            <div className="row" style={{ gap: 16 }}>
+            <div className="row topbar-left" style={{ gap: 16 }}>
               <a href="/?view=home" aria-label="Project Jury home"><img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} /></a>
               <div className="crumb">/ {projectName}</div>
               {mode === "room" && (
@@ -297,17 +297,30 @@ export default function Home() {
               )}
             </div>
             <div className="row">
-              {quota?.free_quota && left !== null && (
+              {/* the remaining count comes from the provider; when it is not available (another provider,
+                  paid models, or the lookup failed) the meter still says what the review needs */}
+              {!quota?.demo_model && (
                 <div className="quota-wrap" ref={costRef}>
-                  <button type="button" className={`quota-meter ${left > needed ? "ok" : left === needed ? "exact" : "low"}`} aria-expanded={costOpen}
-                          aria-controls="cost-panel" onClick={() => setCostOpen((o) => !o)}
-                          title={`The review on the form needs about ${needed}. Green: more than enough. Black: exactly enough. Red: not enough.`}>
-                    <span className="quota-num">{left} / {quota.free_quota.limit}</span>
-                    <div className="quota-bar" role="meter" aria-label="Free model requests left today"
-                         aria-valuemin={0} aria-valuemax={quota.free_quota.limit} aria-valuenow={left}>
-                      <div style={{ width: `${Math.max(0, Math.min(100, (left / (quota.free_quota.limit || 1)) * 100))}%` }} />
-                    </div>
-                    <span className="quota-label">requests left today · what does a review cost?</span>
+                  <button type="button" aria-expanded={costOpen} aria-controls="cost-panel" onClick={() => setCostOpen((o) => !o)}
+                          className={`quota-meter ${left === null ? "unknown" : left > needed ? "ok" : left === needed ? "exact" : "low"}`}
+                          title={left === null
+                            ? "What the review on the form needs. How many requests you have left is not available on this deployment."
+                            : `The review on the form needs about ${needed}. Green: more than enough. Black: exactly enough. Red: not enough.`}>
+                    {left !== null && quota?.free_quota ? (
+                      <>
+                        <span className="quota-num">{left} / {quota.free_quota.limit}</span>
+                        <div className="quota-bar" role="meter" aria-label="Free model requests left today"
+                             aria-valuemin={0} aria-valuemax={quota.free_quota.limit} aria-valuenow={left}>
+                          <div style={{ width: `${Math.max(0, Math.min(100, (left / (quota.free_quota.limit || 1)) * 100))}%` }} />
+                        </div>
+                        <span className="quota-label">requests left today · what does a review cost?</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="quota-num">about {needed}</span>
+                        <span className="quota-label">requests needed</span>
+                      </>
+                    )}
                   </button>
                   {costOpen && <div id="cost-panel" className="cost-pop">{costGuide}</div>}
                 </div>
