@@ -15,6 +15,7 @@ from jury.api.store import ReviewStore
 from jury.ingest.brief import build_brief
 from jury.ingest.site_log import add_site
 from jury.ingest.brief import site_only_brief
+from jury import redact
 from jury.models import Persona
 from jury.room.events import stream_events
 from jury.room.graph import build_graph, initial_state
@@ -34,9 +35,11 @@ class Runner:
         llm_factory: Callable[[], JsonModel],
         brief_builder: Callable[..., object] = build_brief,
         site_adder: Callable[..., object] = add_site,
+        byok_factory: Callable[[str], JsonModel] | None = None,
     ):
         self.db_path, self.store, self.personas = db_path, store, personas
         self.llm_factory, self.brief_builder, self.site_adder = llm_factory, brief_builder, site_adder
+        self.byok_factory = byok_factory  # builds a model wrapper around a visitor's own key
         self.tasks: dict[str, asyncio.Task] = {}
         self.llms: dict[str, JsonModel] = {}
         self.inbox: dict[str, list[dict]] = {}  # review id -> the builder's messages the room has not seen
@@ -49,18 +52,47 @@ class Runner:
         if self.is_running(review_id):
             coro.close()
             raise Busy("this review is still running")
-        self.tasks[review_id] = asyncio.create_task(coro)
+        self.tasks[review_id] = asyncio.create_task(self._guarded(review_id, coro))
 
-    def _llm(self, review_id: str) -> JsonModel:
-        if review_id not in self.llms:
-            self.llms[review_id] = self.llm_factory()
-        return self.llms[review_id]
+    async def _guarded(self, review_id: str, coro) -> None:
+        try:
+            await coro
+        finally:
+            self._release(review_id)
+
+    def _llm(self, review_id: str, key: str | None = None) -> JsonModel:
+        """This review's model wrapper (one budget across its pauses). A visitor's key is set for
+        the run that sent it; `_release` takes it away again when that run stops."""
+        llm = self.llms.get(review_id)
+        if key and self.byok_factory is not None:
+            if llm is None or not getattr(llm, "byok", False):
+                fresh = self.byok_factory(key)
+                if llm is not None and hasattr(llm, "budget"):
+                    fresh.budget = llm.budget  # carry on with what the free run already spent
+                llm = self.llms[review_id] = fresh
+                redact.watch(key)
+            elif llm.api_key != key:
+                self._release(review_id)
+                llm.api_key = key
+                redact.watch(key)
+        elif llm is None:
+            llm = self.llms[review_id] = self.llm_factory()
+        return llm
+
+    def _release(self, review_id: str) -> None:
+        """A visitor's key lives only while its run does: nothing keeps it between requests."""
+        llm = self.llms.get(review_id)
+        if llm is not None and getattr(llm, "byok", False) and llm.api_key:
+            redact.forget(llm.api_key)
+            llm.api_key = ""
 
     def start(self, review_id: str, persona_ids: list[str], brief: dict | None = None,
-              repo_url: str = "", demo_text: str = "", site_url: str = "") -> None:
+              repo_url: str = "", demo_text: str = "", site_url: str = "", key: str | None = None) -> None:
+        self._llm(review_id, key)
         self._spawn(review_id, self._start(review_id, persona_ids, brief, repo_url, demo_text, site_url))
 
-    def resume(self, review_id: str, answers: dict[str, str]) -> None:
+    def resume(self, review_id: str, answers: dict[str, str], key: str | None = None) -> None:
+        self._llm(review_id, key)
         # an empty dict is falsy, and LangGraph then pauses again instead of resuming
         self._spawn(review_id, self._run(review_id, Command(resume=answers or {"": ""}), resumed=True))
 
@@ -94,13 +126,14 @@ class Runner:
             return None
         return {**plan(snap.values), "resume": bool(snap.next)}
 
-    def retry(self, review_id: str) -> None:
-        self._spawn(review_id, self._retry(review_id))
+    def retry(self, review_id: str, key: str | None = None) -> None:
+        self._spawn(review_id, self._retry(review_id, key))
 
-    async def _retry(self, review_id: str) -> None:
+    async def _retry(self, review_id: str, key: str | None = None) -> None:
         # the user asked for another go, so it gets a fresh budget
+        self._release(review_id)
         self.llms.pop(review_id, None)
-        llm = self._llm(review_id)
+        llm = self._llm(review_id, key)
         self.store.add_event(review_id, {"type": "resumed", "retry": True})
         config = {"configurable": {"thread_id": review_id}}
         try:

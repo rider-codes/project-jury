@@ -17,10 +17,20 @@ STANCES = ["not useful", "unsure", "useful"]
 
 
 class DemoLLM:
-    def __init__(self, delay: float = 0.6):
+    def __init__(self, delay: float = 0.6, quota_left: int | None = None, own_key: str = ""):
         self.delay = delay
         self.budget = Budget(max_calls=200)
         self.turns_by_persona: dict[str, int] = {}
+        # for working on the bring-your-own-key screens offline: pretend the shared free quota has
+        # `quota_left` requests left, and behave like a wrapper around a visitor's key when given one
+        self.quota_left = quota_left
+        self.api_key = own_key
+        self.byok = bool(own_key)
+
+    async def quota(self) -> dict | None:
+        if self.quota_left is None or self.quota_left < 0:  # negative: a paid key, which has no free quota to show
+            return None
+        return {"remaining": self.quota_left, "limit": 50, "used": 50 - self.quota_left}
 
     async def complete_json(self, tier: Tier, messages: list[dict], vision: bool = False) -> dict:
         self.budget.reserve()

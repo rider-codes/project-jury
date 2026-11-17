@@ -8,7 +8,9 @@ import { PersonaPicker } from "@/components/PersonaPicker";
 import { RoomView } from "@/components/RoomView";
 import { Icon } from "@/components/bits";
 import { ThemeSwitch, useTheme } from "@/components/Theme";
-import { api, type Quota } from "@/lib/api";
+import { KeyCard } from "@/components/KeyCard";
+import { api, POOL_EMPTY, type Quota } from "@/lib/api";
+import { getKey } from "@/lib/key";
 import { emptyRoom, roomReducer } from "@/lib/room";
 import type { Chat, ChatListItem, Persona, ReviewListItem } from "@/lib/types";
 
@@ -52,6 +54,14 @@ export default function Home() {
   const [barBusy, setBarBusy] = useState(false);
   const [quota, setQuota] = useState<Quota | null>(null);
   const [streamRun, setStreamRun] = useState(0); // bumped to reopen the event stream after a retry
+  // bring your own key: the visitor's key is kept in this tab only (lib/key.ts); `keyRun` is bumped
+  // when it is saved or removed, so the quota is read again for the right key
+  const [ownKey, setOwnKey] = useState(false);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [keyRun, setKeyRun] = useState(0);
+  const [poolEmpty, setPoolEmpty] = useState(false); // a start was refused because the shared quota ran out
+  const shownKeyPanel = useRef(false); // the meter's panel opens by itself once, when the free quota is gone
+  useEffect(() => { setOwnKey(!!getKey()); }, [keyRun]);
 
   // ?view=home: the public dashboard, reachable from the app's Home button
   const [home, setHome] = useState(false);
@@ -89,8 +99,14 @@ export default function Home() {
   // starts, pauses or ends, since that is when the number has moved
   useEffect(() => {
     if (access !== "open") return;
-    api.quota().then(setQuota).catch(() => setQuota(null));
-  }, [access, loadRun, room.status]);
+    api.quota().then((q) => {
+      setQuota(q);
+      if (!q.exhausted) setPoolEmpty(false);
+      // the first time the page finds the free quota gone, open the panel that explains it, so the
+      // visitor sees "use your own key" without having to know the meter is clickable
+      if (q.exhausted && q.byok && !shownKeyPanel.current) { shownKeyPanel.current = true; setCostOpen(true); }
+    }).catch(() => setQuota(null));
+  }, [access, loadRun, room.status, keyRun]);
 
   // the cost panel closes on Escape or a click outside it
   useEffect(() => {
@@ -153,9 +169,24 @@ export default function Home() {
   // what the meter measures against: the review on the form, or one message in one-on-one
   const meterNeed = mode === "chat" ? 1 : needed;
   const short = left !== null && left < meterNeed;
+  // the shared free quota is gone and the visitor has no key of their own yet: ask for one
+  const needKey = !!quota?.byok && !ownKey && (!!quota.exhausted || poolEmpty);
+  // a review that ran out of quota partway: with a key saved, Retry carries on using it
+  const stalledOnQuota = started && room.status === "error" && /quota/i.test(room.error ?? "");
+  const keyChanged = () => { setKeyRun((n) => n + 1); setStartError(null); setPoolEmpty(false); };
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  // a refusal because the shared quota ran out is not an error to read: it opens the key card instead
+  const failedStart = (e: Error) => {
+    if (e.message.startsWith(POOL_EMPTY)) {
+      setPoolEmpty(true);
+      setKeyRun((n) => n + 1);
+    } else {
+      setStartError(e.message);
+    }
+  };
 
   const start = async (sample: boolean) => {
     setStarting(true);
@@ -171,7 +202,7 @@ export default function Home() {
         setChat({ ...c, messages: [v] });
         setMode("chat");
       } catch (e) {
-        setStartError((e as Error).message);
+        failedStart(e as Error);
       }
       setStarting(false);
       return;
@@ -182,7 +213,7 @@ export default function Home() {
       setChat(null);
       setReviewId(id);
     } catch (e) {
-      setStartError((e as Error).message);
+      failedStart(e as Error);
     }
     setStarting(false);
   };
@@ -393,7 +424,9 @@ export default function Home() {
                              aria-valuemin={0} aria-valuemax={quota.free_quota.limit} aria-valuenow={left}>
                           <div style={{ width: `${Math.max(0, Math.min(100, (left / (quota.free_quota.limit || 1)) * 100))}%` }} />
                         </div>
-                        <span className="quota-label">requests left today · what does a review cost?</span>
+                        <span className="quota-label">
+                          {needKey ? "free quota used up · use your own key" : "requests left today · what does a review cost?"}
+                        </span>
                       </>
                     ) : (
                       <>
@@ -402,7 +435,15 @@ export default function Home() {
                       </>
                     )}
                   </button>
-                  {costOpen && <div id="cost-panel" className="cost-pop">{costGuide}</div>}
+                  {costOpen && (
+                    <div id="cost-panel" className="cost-pop">
+                      {/* the free quota is gone: say so here, where the visitor is looking at the meter */}
+                      {quota?.byok && (needKey || ownKey) && (
+                        <div className="cost-key"><KeyCard exhausted={needKey} hasKey={ownKey} onChange={keyChanged} /></div>
+                      )}
+                      {costGuide}
+                    </div>
+                  )}
                 </div>
               )}
               <ThemeSwitch dark={dark} onPick={pickTheme} />
@@ -480,14 +521,26 @@ export default function Home() {
                     <div className="muted" style={{ fontSize: 13 }}>Demo model: free and offline, opinions are canned.</div>
                   )}
                   {/* what a review costs is shown by the meter in the top bar, not here */}
+                  {quota?.byok && (needKey || keyOpen || ownKey) && (
+                    <KeyCard exhausted={needKey} hasKey={ownKey} onChange={keyChanged} />
+                  )}
                   {startError && <div className="form-error">{startError}</div>}
                   <div className="row">
-                    <button type="submit" className="btn" disabled={starting || (!repo.trim() && !site.trim()) || !selected.length}>
+                    <button type="submit" className="btn"
+                            disabled={starting || (!repo.trim() && !site.trim()) || !selected.length || needKey}>
                       {starting ? (selected.length === 1 ? `${names[selected[0]] ?? "They"} is reviewing…` : "Starting…")
                         : selected.length === 1 ? `Chat with ${names[selected[0]] ?? "them"}` : "Start review"}
                     </button>
+                    {quota?.byok && !needKey && !keyOpen && !ownKey && (
+                      <button type="button" className="link-btn" onClick={() => setKeyOpen(true)}>Use your own key</button>
+                    )}
                   </div>
                 </form>
+              )}
+
+              {stalledOnQuota && quota?.byok && (
+                <KeyCard exhausted={!ownKey} hasKey={ownKey} onChange={keyChanged}
+                         then="Press Retry to carry on from where it stopped." />
               )}
 
               <RoomView room={room} names={names} personas={personas} onAnswer={answer} onRetry={retry} />

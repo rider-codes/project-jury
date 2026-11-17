@@ -8,6 +8,7 @@ from pathlib import Path
 
 from jury.agent import JsonModel, ask_structured
 from jury.models import Persona, RoomSummary, Tier, VerdictValue
+from jury.redact import redact
 from jury.room.context import render
 from jury.room.state import RoomState
 
@@ -47,7 +48,7 @@ def make_node(llm: JsonModel, personas: dict[str, Persona], use_model: bool = Tr
         try:
             s = await ask_structured(llm, Tier.cheap, messages, RoomSummary, "moderator")
         except Exception as e:
-            summary["error"] = f"{type(e).__name__}: {e}"[:300]
+            summary["error"] = redact(f"{type(e).__name__}: {e}")[:300]
             return {"summary": summary}
         return {"summary": {**summary, **s.model_dump(), "generated_by": "model"}}
 

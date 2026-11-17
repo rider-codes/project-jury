@@ -34,7 +34,9 @@ from jury.api.store import TERMINAL, ReviewStore
 from jury.chat.room_history import load_room
 from jury.chat.session import ChatSession
 from jury.chat.store import ChatStore
+from jury import redact as redactor
 from jury.ingest.site_log import vision_calls
+from jury.llm import LLMError, clean_key
 from jury.personas import load_all
 from jury.redact import redact
 from jury.room.retry import needed
@@ -82,10 +84,19 @@ class Login(BaseModel):
     code: str = Field(max_length=200)
 
 
-def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder=None, site_adder=None) -> FastAPI:
+KEY_HEADER = "x-jury-key"
+POOL_EMPTY = "The free quota for today is used up. Add your own OpenRouter key to keep going."
+
+
+def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder=None, site_adder=None,
+               byok_factory: Callable[[str], JsonModel] | None = None) -> FastAPI:
     """`db_path` holds the LangGraph checkpoints. Reviews, events and chats go in a
     separate `<name>_app.sqlite` beside it: sharing one file let the event log and
-    the checkpointer lock each other out ("database is locked")."""
+    the checkpointer lock each other out ("database is locked").
+
+    `byok_factory` builds a model wrapper around a visitor's own key, sent in the
+    `X-Jury-Key` header. Without it (the demo model) the header is ignored. The key is
+    never stored: it is held in memory while a run uses it and then dropped."""
     personas = load_all()
     p = Path(db_path)
     app_db = str(p.with_name(f"{p.stem}_app{p.suffix or '.sqlite'}"))
@@ -94,8 +105,50 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
     kwargs = {"brief_builder": brief_builder} if brief_builder else {}
     if site_adder:
         kwargs["site_adder"] = site_adder
-    runner = Runner(db_path, store, personas, llm_factory, **kwargs)
+    runner = Runner(db_path, store, personas, llm_factory, byok_factory=byok_factory, **kwargs)
     chat_llms: dict[str, JsonModel] = {}
+
+    def visitor_key(request: Request) -> str | None:
+        """The visitor's own key from the request, checked for shape; None when there is none."""
+        raw = request.headers.get(KEY_HEADER, "").strip()
+        if not raw or byok_factory is None:
+            return None
+        try:
+            return clean_key(raw)
+        except LLMError as e:
+            raise HTTPException(422, str(e))
+
+    async def require_free_quota(key: str | None) -> None:
+        """Refuse to start on the shared key once its free quota is gone, instead of failing partway."""
+        if key or byok_factory is None:
+            return
+        llm = llm_factory()
+        q = await llm.quota() if hasattr(llm, "quota") else None
+        if q and q.get("remaining") == 0:
+            raise HTTPException(429, POOL_EMPTY)
+
+    def chat_llm(chat_id: str, key: str | None) -> JsonModel:
+        """The chat's model wrapper (one budget for the whole chat), with the visitor's key set for this request."""
+        llm = chat_llms.get(chat_id)
+        if key and byok_factory is not None:
+            if llm is None or not getattr(llm, "byok", False):
+                fresh = byok_factory(key)
+                if llm is not None and hasattr(llm, "budget"):
+                    fresh.budget = llm.budget
+                llm = chat_llms[chat_id] = fresh
+                redactor.watch(key)
+            elif llm.api_key != key:
+                release(llm)
+                llm.api_key = key
+                redactor.watch(key)
+        elif llm is None:
+            llm = chat_llms[chat_id] = llm_factory()
+        return llm
+
+    def release(llm: JsonModel) -> None:
+        if getattr(llm, "byok", False) and llm.api_key:
+            redactor.forget(llm.api_key)
+            llm.api_key = ""
 
     app = FastAPI(title="Project Jury")
     app.state.runner = runner
@@ -147,16 +200,24 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         ]
 
     @app.get("/api/quota")
-    async def quota():
-        """What a review will cost against today's free quota. The page shows it before starting."""
-        llm = llm_factory()
-        demo = type(llm).__name__ == "DemoLLM"
+    async def quota(request: Request):
+        """What a review will cost against today's free quota. The page shows it before starting.
+        `exhausted`: the shared free quota is gone, so the page should ask for the visitor's own key."""
+        key = visitor_key(request)
+        llm = byok_factory(key) if key else llm_factory()
+        # the demo model has no quota, unless it is pretending to (JURY_DEMO_BYOK, for UI work)
+        demo = type(llm).__name__ == "DemoLLM" and getattr(llm, "quota_left", None) is None
         q = None if demo or not hasattr(llm, "quota") else await llm.quota()
         # a live site adds up to this many vision calls (one per screenshot described)
-        return {"demo_model": demo, "free_quota": q, "site_calls": vision_calls()}
+        return {"demo_model": demo, "free_quota": q, "site_calls": vision_calls(),
+                "byok": byok_factory is not None, "own_key": key is not None,
+                "exhausted": key is None and q is not None and q.get("remaining") == 0}
 
     @app.post("/api/reviews", status_code=201)
-    async def new_review(body: NewReview):
+    async def new_review(body: NewReview, request: Request):
+        key = visitor_key(request)
+        if not body.sample:
+            await require_free_quota(key)
         ids = list(dict.fromkeys(body.persona_ids))
         unknown = [p for p in ids if p not in personas]
         if not ids or unknown:
@@ -167,7 +228,7 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         if body.sample:
             brief = json.loads(SAMPLE_BRIEF.read_text(encoding="utf-8"))
             store.create(review_id, brief["project_name"], brief["repo_url"], ids)
-            runner.start(review_id, ids, brief=brief)
+            runner.start(review_id, ids, brief=brief, key=key)
         else:
             from jury.ingest.github import IngestError, parse_repo_url
             repo_url = body.repo_url.strip()
@@ -189,7 +250,7 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
             else:  # a site-only review: named after the site until the brief renames it
                 from urllib.parse import urlsplit
                 store.create(review_id, (urlsplit(site_url).hostname or site_url).removeprefix("www."), site_url, ids)
-            runner.start(review_id, ids, repo_url=repo_url, demo_text=body.demo, site_url=site_url)
+            runner.start(review_id, ids, repo_url=repo_url, demo_text=body.demo, site_url=site_url, key=key)
         return {"id": review_id}
 
     @app.get("/api/reviews")
@@ -232,12 +293,12 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.post("/api/reviews/{review_id}/answers", status_code=202)
-    async def answer(review_id: str, body: Answers):  # async: resume needs the running event loop
+    async def answer(review_id: str, body: Answers, request: Request):  # async: resume needs the running event loop
         review_or_404(review_id)
         if store.status(review_id) != "paused":
             raise HTTPException(409, "this review is not waiting for answers")
         try:
-            runner.resume(review_id, body.answers)
+            runner.resume(review_id, body.answers, key=visitor_key(request))
         except Busy as e:
             raise HTTPException(409, str(e))
         return {"ok": True}
@@ -260,7 +321,8 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         return {"ok": True}
 
     @app.post("/api/reviews/{review_id}/retry", status_code=202)
-    async def retry(review_id: str):
+    async def retry(review_id: str, request: Request):
+        key = visitor_key(request)
         review_or_404(review_id)
         if runner.is_running(review_id):
             raise HTTPException(409, "this review is still running")
@@ -271,11 +333,12 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
             raise HTTPException(409, "the project was never read, so start a new review instead")
         if not (todo["resume"] or needed(todo)):
             raise HTTPException(409, "nothing failed in this review")
-        runner.retry(review_id)
+        runner.retry(review_id, key=key)
         return todo
 
     @app.post("/api/chats", status_code=201)
-    async def new_chat(body: NewChat):
+    async def new_chat(body: NewChat, request: Request):
+        key = visitor_key(request)
         if body.persona_id not in personas:
             raise HTTPException(422, "unknown persona")
         if body.review_id:
@@ -300,6 +363,7 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
                     site_url = normalize_url(site_url)
             except (IngestError, SiteError) as e:
                 raise HTTPException(422, str(e))
+            await require_free_quota(key)
             try:
                 if repo_url:  # reading the repo makes no model request
                     brief = await asyncio.to_thread(runner.brief_builder, repo_url, body.demo,
@@ -310,7 +374,11 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
                 raise HTTPException(422, redact(str(e)))
             chat_id = uuid.uuid4().hex[:12]
             if site_url:  # describing the screenshots costs up to a few requests, on this chat's budget
-                brief = await runner.site_adder(chat_llms.setdefault(chat_id, llm_factory()), brief, site_url)
+                llm = chat_llm(chat_id, key)
+                try:
+                    brief = await runner.site_adder(llm, brief, site_url)
+                finally:
+                    release(llm)
                 if not repo_url and not brief.site:
                     raise HTTPException(422, next((n for n in brief.notes if n.startswith("live site not captured")),
                                                   "the site could not be opened"))
@@ -340,33 +408,39 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         return chat_view(s)
 
     @app.post("/api/chats/{chat_id}/verdict")
-    async def chat_verdict(chat_id: str):
+    async def chat_verdict(chat_id: str, request: Request):
         """One reviewer's review of the project, without the panel (one model request)."""
+        key = visitor_key(request)
         s = chats.load(chat_id)
         if s is None:
             raise HTTPException(404, "no such chat")
-        llm = chat_llms.setdefault(chat_id, llm_factory())
+        llm = chat_llm(chat_id, key)
         try:
             v = await s.verdict(llm, personas[s.persona_id])
         except ValueError as e:
             raise HTTPException(422, str(e))
         except Exception as e:
             raise HTTPException(502, redact(f"the model did not answer: {e}")[:400])
+        finally:
+            release(llm)
         chats.save(s)
         return v
 
     @app.post("/api/chats/{chat_id}/messages")
-    async def send(chat_id: str, body: ChatMessage):
+    async def send(chat_id: str, body: ChatMessage, request: Request):
+        key = visitor_key(request)
         s = chats.load(chat_id)
         if s is None:
             raise HTTPException(404, "no such chat")
-        llm = chat_llms.setdefault(chat_id, llm_factory())
+        llm = chat_llm(chat_id, key)
         try:
             reply = await s.send(llm, personas[s.persona_id], body.text)
         except ValueError as e:
             raise HTTPException(422, str(e))
         except Exception as e:
             raise HTTPException(502, redact(f"the model did not answer: {e}")[:400])
+        finally:
+            release(llm)
         chats.save(s)
         return reply
 

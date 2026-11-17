@@ -9,6 +9,13 @@
       "port": 8000
     },
     {
+      "name": "api-demo-byok",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "jury.api", "--demo-byok", "--db", "jury_demo.sqlite"],
+      "cwd": "D:\\Rahul\\Project Jury",
+      "port": 8000
+    },
+    {
       "name": "api",
       "runtimeExecutable": "uv",
       "runtimeArgs": ["run", "python", "-m", "jury.api"],

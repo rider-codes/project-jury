@@ -1,3 +1,4 @@
+import { getKey } from "./key";
 import type { Chat, ChatListItem, ChatMessage, Persona, ReviewListItem } from "./types";
 
 // A production build is served by the API server itself, so it talks to its own origin.
@@ -5,12 +6,21 @@ import type { Chat, ChatListItem, ChatMessage, Persona, ReviewListItem } from ".
 export const API =
   process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
 
+/** The start of the server's message when the shared free quota is gone (see POOL_EMPTY in app.py). */
+export const POOL_EMPTY = "The free quota for today is used up";
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const key = getKey();
   const res = await fetch(`${API}${path}`, {
     ...init,
     // `npm run dev` is on another port than the API, so the access cookie must be sent explicitly
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      // the visitor's own key, when they gave one: it pays for their runs instead of the shared quota
+      ...(key ? { "X-Jury-Key": key } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
   if (!res.ok) {
     let detail = `${res.status}`;
@@ -29,6 +39,9 @@ export type Quota = {
   demo_model: boolean;
   free_quota: { remaining: number; limit: number } | null;
   site_calls?: number; // vision calls a live site adds
+  byok?: boolean; // this deployment accepts a visitor's own key
+  own_key?: boolean; // the request carried one
+  exhausted?: boolean; // the shared free quota is gone, so ask for a key
 };
 
 export const api = {

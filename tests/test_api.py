@@ -79,7 +79,8 @@ def test_no_access_code_means_open(client):
 
 
 def test_quota_endpoint_with_demo_model(client):
-    assert client.get("/api/quota").json() == {"demo_model": True, "free_quota": None, "site_calls": 4}
+    assert client.get("/api/quota").json() == {"demo_model": True, "free_quota": None, "site_calls": 4,
+                                               "byok": False, "own_key": False, "exhausted": False}
 
 
 def test_personas(client):

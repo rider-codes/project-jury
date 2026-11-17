@@ -80,7 +80,7 @@ Personas are just prompts in `personas/*.yaml`. Each file has `cares_about`, `ru
 - `JURY_MAX_TOKENS` defaults to 1.2M per review. The router ends the debate early when the rest of the budget could not cover every verdict and the summary, so a tight budget shortens the debate instead of losing the verdicts.
 - Levers: prompt caching, code router, room size, cheap tier for round 1 and the summary.
 - Paid version: charge per review or by credits, with a "deep review" option that uses a stronger tier for the senior engineer. Keep the per-review token budget in `llm.py` so one huge repo cannot erase the margin.
-- Public deployment: bring-your-own-key or a per-IP limit.
+- Public deployment: bring-your-own-key (built: when the shared free quota is gone the page asks for the visitor's OpenRouter key, sent in `X-Jury-Key`, kept in memory for one run, never stored) or a per-IP limit (not built). Stripe is not built.
 
 ## Conventions
 

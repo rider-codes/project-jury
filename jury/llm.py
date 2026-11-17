@@ -31,6 +31,14 @@ class Overloaded(LLMError):
     """A model is rate-limited upstream or erroring; another model may still work."""
 
 
+def clean_key(key: str) -> str:
+    """A visitor's key, trimmed and checked for shape (not for validity: the provider does that)."""
+    key = key.strip()
+    if not 16 <= len(key) <= 300 or not key.isascii() or not key.isprintable() or any(c.isspace() for c in key):
+        raise LLMError("that does not look like an API key")
+    return key
+
+
 @dataclass
 class Budget:
     """Per-review cap on calls and tokens."""
@@ -69,6 +77,32 @@ class LLM:
     timeout: float = 120.0
     _sem: asyncio.Semaphore | None = None
     last_model: str | None = None
+    byok: bool = False  # the key belongs to a visitor, so the server must not keep it past the run
+    vision: str = ""  # vision models for a visitor's key (JURY_BYOK_MODEL_VISION)
+
+    @classmethod
+    def for_key(cls, key: str) -> "LLM":
+        """A wrapper that spends a visitor's own key. Models come from JURY_BYOK_MODEL_<TIER> when set
+        (a paid key can use better models than the free ones), else the usual JURY_MODEL_<TIER>."""
+        provider = os.environ.get("JURY_PROVIDER", "openrouter")
+        if provider not in PROVIDERS:
+            raise LLMError(f"unknown provider: {provider}")
+        models = {
+            t: os.environ.get(f"JURY_BYOK_MODEL_{t.value.upper()}", "") or os.environ.get(f"JURY_MODEL_{t.value.upper()}", "")
+            for t in Tier
+        }
+        return cls(
+            provider=provider,
+            api_key=clean_key(key),
+            models=models,
+            budget=Budget(
+                max_calls=int(os.environ.get("JURY_MAX_CALLS", 60)),
+                max_tokens=int(os.environ.get("JURY_MAX_TOKENS", 1_200_000)),
+            ),
+            max_concurrency=int(os.environ.get("JURY_MAX_CONCURRENCY", 2)),
+            byok=True,
+            vision=os.environ.get("JURY_BYOK_MODEL_VISION", ""),
+        )
 
     @classmethod
     def from_env(cls) -> "LLM":
@@ -101,7 +135,7 @@ class LLM:
 
     def vision_models(self) -> list[str]:
         """Models that read screenshots: JURY_MODEL_VISION, else the mid tier."""
-        raw = os.environ.get("JURY_MODEL_VISION", "")
+        raw = self.vision or os.environ.get("JURY_MODEL_VISION", "")
         models = [m.strip() for m in raw.split(",") if m.strip()]
         return models or self.models_for(Tier.mid)
 

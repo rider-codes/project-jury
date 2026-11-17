@@ -2,6 +2,7 @@
 
 from jury.agent import JsonModel, final_verdict
 from jury.models import Brief, Persona
+from jury.redact import redact
 from jury.room.state import VerdictTask
 
 NODE = "final_verdict"
@@ -16,7 +17,7 @@ def make_node(llm: JsonModel, personas: dict[str, Persona]):
                 answers=task.get("answers"),
             )
         except Exception as e:
-            return {"verdict_failures": {pid: f"{type(e).__name__}: {e}"[:500]}}
+            return {"verdict_failures": {pid: redact(f"{type(e).__name__}: {e}")[:500]}}
         return {"verdicts": {pid: result.model_dump(mode="json")}}
 
     return node

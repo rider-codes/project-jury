@@ -2,6 +2,7 @@
 
 from jury.agent import JsonModel, debate_turn
 from jury.models import Brief, Persona
+from jury.redact import redact
 from jury.room.context import render
 from jury.room.state import RoomState, active_personas, builder_answers, current_stances
 
@@ -27,7 +28,7 @@ def make_node(llm: JsonModel, personas: dict[str, Persona]):
                 answers=builder_answers(state),
             )
         except Exception as e:  # a failed turn still counts, so the debate cannot loop
-            update["turns"] = [{**base, "error": f"{type(e).__name__}: {e}"[:500], "message": "", "claims": [],
+            update["turns"] = [{**base, "error": redact(f"{type(e).__name__}: {e}")[:500], "message": "", "claims": [],
                                 "rejected": [], "stance": before, "stance_changed": False,
                                 "stance_change_reason": None, "new_point": False, "challenges": [],
                                 "open_question": None}]

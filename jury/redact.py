@@ -7,6 +7,7 @@ included. Everything that leaves the server as an error or an event goes through
 
 import os
 import re
+from collections import Counter
 
 SECRET_ENV = ("OPENROUTER_API_KEY", "GEMINI_API_KEY", "GITHUB_TOKEN")
 HIDDEN = "[hidden]"
@@ -21,9 +22,28 @@ _SHAPES = re.compile(
 )
 
 
+_watched: Counter[str] = Counter()  # visitors' keys in use right now (a key may be in two runs at once)
+
+
+def watch(key: str) -> None:
+    """Hide this visitor's key in anything redacted until `forget` is called. Needed for keys whose
+    shape the patterns above do not know."""
+    if len(key) >= 8:
+        _watched[key] += 1
+
+
+def forget(key: str) -> None:
+    if _watched[key] > 1:
+        _watched[key] -= 1
+    else:
+        _watched.pop(key, None)
+
+
 def redact(text: str) -> str:
     for name in SECRET_ENV:
         value = os.environ.get(name, "").strip()
         if len(value) >= 8:
             text = text.replace(value, HIDDEN)
+    for key in list(_watched):
+        text = text.replace(key, HIDDEN)
     return _SHAPES.sub(HIDDEN, text)

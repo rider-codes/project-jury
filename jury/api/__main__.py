@@ -20,19 +20,25 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
     parser.add_argument("--db", default=os.environ.get("JURY_DB", "jury.sqlite"))
     parser.add_argument("--demo-model", action="store_true")
+    parser.add_argument("--demo-byok", action="store_true",
+                        help="with the demo model: pretend the free quota is gone and accept any key (UI work)")
     args = parser.parse_args()
     load_dotenv()
 
-    demo = args.demo_model or os.environ.get("JURY_DEMO_MODEL") == "1"
+    demo = args.demo_model or args.demo_byok or os.environ.get("JURY_DEMO_MODEL") == "1"
+    byok = None
     if demo:
         print("Using the DEMO model: free and offline, opinions are canned.")
         factory = DemoLLM
+        if args.demo_byok:
+            factory, byok = lambda: DemoLLM(quota_left=0), lambda key: DemoLLM(own_key=key, quota_left=-1)
     else:
         LLM.from_env()  # fail fast on a missing key
-        factory = LLM.from_env
+        factory, byok = LLM.from_env, LLM.for_key
     if args.host not in ("127.0.0.1", "localhost") and not os.environ.get("JURY_ACCESS_CODE") and not demo:
-        print("WARNING: serving publicly with real models and no JURY_ACCESS_CODE: anyone can spend your quota.")
-    uvicorn.run(create_app(args.db, factory), host=args.host, port=args.port, proxy_headers=True,
+        print("Serving publicly with no JURY_ACCESS_CODE: anyone can use your free model quota, and once it is "
+              "gone visitors are asked for their own key. Everyone can see every past review.")
+    uvicorn.run(create_app(args.db, factory, byok_factory=byok), host=args.host, port=args.port, proxy_headers=True,
                 forwarded_allow_ips="*")
 
 

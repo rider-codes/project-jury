@@ -494,3 +494,14 @@ button.quota-meter:hover { border-color: var(--text); }
 
 /* first impressions and verdicts are chat bubbles like the debate, sized to their text */
 .room-chat .turn > .bubble { flex: 0 1 auto; max-width: 720px; }
+
+/* ---------- bring your own key ---------- */
+.keycard { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--bg); font-size: 14px; }
+.keycard.empty { border-color: var(--not-useful); }
+.keycard h3 { margin: 0; font-size: 16px; color: var(--text); }
+.keycard p { margin: 0; }
+.keycard a { color: var(--text); text-decoration: underline; }
+.keycard-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
+.keycard .row .input { flex: 1 1 220px; min-width: 0; }
+.keycard-mask { padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 8px; color: var(--muted); }
+.cost-key { padding: 12px 12px 0; }

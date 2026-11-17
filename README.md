@@ -11,8 +11,9 @@ What makes it different from asking a chatbot: **no evidence, no claim**. Every 
 quote a file, a demo step, the live site or one of your answers. A checker written in plain code
 (`jury/verifier.py`, no model) looks each quote up and drops anything it cannot find.
 
-Live demo: <https://project-jury.onrender.com>. Anyone can watch a real review replayed there. Running your
-own review needs an access code, because reviews spend model quota; the page has a link to request one.
+Live demo: <https://project-jury.onrender.com>. Anyone can watch a real review replayed there and run their
+own. Reviews use the host's free model quota; when it runs out for the day, the page asks for your own
+OpenRouter key (see "Bring your own key").
 
 ## The reviewers
 
@@ -82,6 +83,19 @@ about it.
 - OpenRouter's free tier allows 50 requests a day, so about two reviews.
 - Free hosts have no persistent disk, so past reviews reset on every restart.
 
+## Bring your own key
+
+When the shared free quota hits 0, the page asks the visitor for their own OpenRouter key (they can also
+open the card any time with "Use your own key"). Their runs then spend their account, not yours.
+
+- The key stays in the browser tab (`sessionStorage`) and is sent in an `X-Jury-Key` header. The server holds
+  it in memory only while a run uses it, never writes it to the database or logs, and hides it from error
+  text (`jury/redact.py`).
+- With a key, the models come from `JURY_BYOK_MODEL_CHEAP` / `_MID` / `_STRONG` / `_VISION` when set (use
+  paid models there), else the usual `JURY_MODEL_*`. A free-model key still hits its own daily cap.
+- `python -m jury.api --demo-byok` pretends the shared quota is gone and accepts any key, for working on the
+  screens offline.
+
 ## Tests
 
 ```bash
@@ -96,9 +110,10 @@ if a case fails. Add `--demo-model` to check only the plumbing.
 ## Deploying
 
 `Dockerfile` builds the web app to static files and serves them from the API. `render.yaml` is a Render
-blueprint for the free plan. Set `JURY_ACCESS_CODE` on any public deployment: without it, anyone with the
-URL can spend your model quota. `NEXT_PUBLIC_REQUEST_CODE_URL` (build time) sets where the "Request one
-here" link on the access form goes; by default it opens an issue on this repo.
+blueprint for the free plan. The deployment is open: no access code. Leave `JURY_ACCESS_CODE` unset for that;
+set it only to lock a private instance (`NEXT_PUBLIC_REQUEST_CODE_URL`, at build time, sets where the "Request
+one here" link goes). Open means anyone can use the free quota, and every visitor can currently see every
+past review and chat, since history is not separated per visitor yet.
 
 ## Layout
 
