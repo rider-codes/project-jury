@@ -69,7 +69,9 @@ class NewChat(BaseModel):
     review_id: str | None = None
     with_history: bool = False  # default is a clean start, per the plan
     sample: bool = False
-    repo_url: str = Field("", max_length=500)  # talk about a repo without running a room first
+    repo_url: str = Field("", max_length=500)  # talk about a project without running a room first
+    site_url: str = Field("", max_length=500)  # its live site, captured like a review's
+    demo: str = Field("", max_length=20_000)
 
 
 class ChatMessage(BaseModel):
@@ -159,8 +161,8 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         unknown = [p for p in ids if p not in personas]
         if not ids or unknown:
             raise HTTPException(422, f"pick 1 to {len(personas)} known personas; unknown: {unknown}")
-        if not body.sample and not body.repo_url.strip():
-            raise HTTPException(422, "give a GitHub link, or use the sample project")
+        if not body.sample and not body.repo_url.strip() and not body.site_url.strip():
+            raise HTTPException(422, "give a GitHub link or a live site")
         review_id = uuid.uuid4().hex[:12]
         if body.sample:
             brief = json.loads(SAMPLE_BRIEF.read_text(encoding="utf-8"))
@@ -168,10 +170,13 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
             runner.start(review_id, ids, brief=brief)
         else:
             from jury.ingest.github import IngestError, parse_repo_url
-            try:
-                ref = parse_repo_url(body.repo_url)
-            except IngestError as e:
-                raise HTTPException(422, str(e))
+            repo_url = body.repo_url.strip()
+            ref = None
+            if repo_url:
+                try:
+                    ref = parse_repo_url(repo_url)
+                except IngestError as e:
+                    raise HTTPException(422, str(e))
             site_url = body.site_url.strip()
             if site_url:
                 from jury.ingest.site import SiteError, normalize_url
@@ -179,8 +184,12 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
                     site_url = normalize_url(site_url)
                 except SiteError as e:
                     raise HTTPException(422, str(e))
-            store.create(review_id, ref.repo, ref.url, ids)
-            runner.start(review_id, ids, repo_url=body.repo_url, demo_text=body.demo, site_url=site_url)
+            if ref is not None:
+                store.create(review_id, ref.repo, ref.url, ids)
+            else:  # a site-only review: named after the site until the brief renames it
+                from urllib.parse import urlsplit
+                store.create(review_id, (urlsplit(site_url).hostname or site_url).removeprefix("www."), site_url, ids)
+            runner.start(review_id, ids, repo_url=repo_url, demo_text=body.demo, site_url=site_url)
         return {"id": review_id}
 
     @app.get("/api/reviews")
@@ -278,15 +287,34 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
             session = ChatSession(persona_id=body.persona_id, brief=brief,
                                   room_thread=body.review_id if body.with_history else None,
                                   room_context=context if body.with_history else "")
-        elif body.repo_url.strip():
-            # reading the repo makes no model request, so this costs nothing until the first message
-            from jury.ingest.github import IngestError
+        elif body.repo_url.strip() or body.site_url.strip():
+            # one reviewer, no room: read the project the same way a review does
+            from jury.ingest.brief import site_only_brief
+            from jury.ingest.github import IngestError, parse_repo_url
+            from jury.ingest.site import SiteError, normalize_url
+            repo_url, site_url = body.repo_url.strip(), body.site_url.strip()
             try:
-                brief = await asyncio.to_thread(runner.brief_builder, body.repo_url.strip(), "",
-                                                os.environ.get("GITHUB_TOKEN") or None)
+                if repo_url:
+                    parse_repo_url(repo_url)
+                if site_url:
+                    site_url = normalize_url(site_url)
+            except (IngestError, SiteError) as e:
+                raise HTTPException(422, str(e))
+            try:
+                if repo_url:  # reading the repo makes no model request
+                    brief = await asyncio.to_thread(runner.brief_builder, repo_url, body.demo,
+                                                    os.environ.get("GITHUB_TOKEN") or None)
+                else:
+                    brief = site_only_brief(site_url, body.demo)
             except IngestError as e:
                 raise HTTPException(422, redact(str(e)))
-            session = ChatSession(persona_id=body.persona_id, brief=brief.model_dump())
+            chat_id = uuid.uuid4().hex[:12]
+            if site_url:  # describing the screenshots costs up to a few requests, on this chat's budget
+                brief = await runner.site_adder(chat_llms.setdefault(chat_id, llm_factory()), brief, site_url)
+                if not repo_url and not brief.site:
+                    raise HTTPException(422, next((n for n in brief.notes if n.startswith("live site not captured")),
+                                                  "the site could not be opened"))
+            session = ChatSession(id=chat_id, persona_id=body.persona_id, brief=brief.model_dump())
         elif body.sample:
             session = ChatSession(persona_id=body.persona_id,
                                   brief=json.loads(SAMPLE_BRIEF.read_text(encoding="utf-8")))
@@ -299,12 +327,33 @@ def create_app(db_path: str, llm_factory: Callable[[], JsonModel], brief_builder
         return {"id": s.id, "persona_id": s.persona_id, "project_name": s.brief["project_name"],
                 "room_thread": s.room_thread, "with_history": bool(s.room_context), "messages": s.messages}
 
+    @app.get("/api/chats")
+    def list_chats():
+        """One-on-one chats that have at least one message, newest first, for the Past panel."""
+        return [c for c in chats.list(30) if c["messages"]]
+
     @app.get("/api/chats/{chat_id}")
     def get_chat(chat_id: str):
         s = chats.load(chat_id)
         if s is None:
             raise HTTPException(404, "no such chat")
         return chat_view(s)
+
+    @app.post("/api/chats/{chat_id}/verdict")
+    async def chat_verdict(chat_id: str):
+        """One reviewer's review of the project, without the panel (one model request)."""
+        s = chats.load(chat_id)
+        if s is None:
+            raise HTTPException(404, "no such chat")
+        llm = chat_llms.setdefault(chat_id, llm_factory())
+        try:
+            v = await s.verdict(llm, personas[s.persona_id])
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        except Exception as e:
+            raise HTTPException(502, redact(f"the model did not answer: {e}")[:400])
+        chats.save(s)
+        return v
 
     @app.post("/api/chats/{chat_id}/messages")
     async def send(chat_id: str, body: ChatMessage):

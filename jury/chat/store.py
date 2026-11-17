@@ -53,7 +53,9 @@ class ChatStore:
     def list(self, limit: int = 20) -> list[dict]:
         with closing(sqlite3.connect(self.path)) as db:
             rows = db.execute(
-                "SELECT id, persona_id, room_thread, json_array_length(messages), updated_at "
+                "SELECT id, persona_id, room_thread, json_array_length(messages), updated_at, "
+                "json_extract(brief, '$.project_name') "
                 "FROM chats ORDER BY updated_at DESC LIMIT ?", (limit,),
             ).fetchall()
-        return [{"id": r[0], "persona_id": r[1], "room_thread": r[2], "messages": r[3], "updated_at": r[4]} for r in rows]
+        return [{"id": r[0], "persona_id": r[1], "room_thread": r[2], "messages": r[3], "updated_at": r[4],
+                 "project_name": r[5] or ""} for r in rows]

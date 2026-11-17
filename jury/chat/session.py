@@ -3,7 +3,7 @@
 import uuid
 from dataclasses import dataclass, field
 
-from jury.agent import JsonModel, chat_reply
+from jury.agent import JsonModel, chat_reply, final_verdict
 from jury.models import Brief, Persona
 
 MAX_HISTORY_MESSAGES = 12  # older messages are dropped from the prompt (kept in the store)
@@ -47,4 +47,28 @@ class ChatSession:
         }
         # only append once the model call succeeded, so a failed send leaves history intact
         self.messages += [{"role": "user", "text": text}, agent]
+        return agent
+
+    async def verdict(self, llm: JsonModel, persona: Persona) -> dict:
+        """This reviewer's own verdict on the project, with no panel. Appended as an agent message
+        so later replies in the chat know what they concluded."""
+        if persona.id != self.persona_id:
+            raise ValueError(f"this chat is with {self.persona_id}, not {persona.id}")
+        context = f"Earlier, you sat on a review panel for this project:\n{self.room_context}" if self.room_context else ""
+        vv = await final_verdict(llm, persona, Brief.model_validate(self.brief), context=context)
+        v = vv.verdict
+        agent = {
+            "role": "agent",
+            "kind": "verdict",
+            # the text is what later turns of the chat see; the card shows the parts
+            "text": f"My verdict: {v.verdict.value}. {v.headline}. " + " ".join(r.text for r in v.reasons),
+            "headline": v.headline,
+            "claims": [c.model_dump(mode="json") for c in v.reasons],
+            "rejected": [{"text": r.claim.text, "problem": r.problem} for r in vv.rejected],
+            "what_would_change_my_mind": list(v.what_would_change_my_mind),
+            "stance": v.verdict.value,
+            "stance_changed": False,
+            "question": None,
+        }
+        self.messages.append(agent)
         return agent

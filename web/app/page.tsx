@@ -9,8 +9,8 @@ import { RoomView } from "@/components/RoomView";
 import { Icon } from "@/components/bits";
 import { ThemeSwitch, useTheme } from "@/components/Theme";
 import { api, type Quota } from "@/lib/api";
-import { ROUND_LABEL, emptyRoom, roomReducer } from "@/lib/room";
-import type { Chat, Persona, ReviewListItem } from "@/lib/types";
+import { emptyRoom, roomReducer } from "@/lib/room";
+import type { Chat, ChatListItem, Persona, ReviewListItem } from "@/lib/types";
 
 type Mode = "room" | "chat";
 
@@ -34,8 +34,10 @@ export default function Home() {
   const [room, dispatch] = useReducer(roomReducer, emptyRoom);
   const [chat, setChat] = useState<Chat | null>(null);
   const [chatPersona, setChatPersona] = useState<string | null>(null);
+  const [soloOpen, setSoloOpen] = useState<string | null>(null); // a one-reviewer review opening as a one-on-one
   const [drawer, setDrawer] = useState(false);
   const [past, setPast] = useState<ReviewListItem[]>([]);
+  const [pastChats, setPastChats] = useState<ChatListItem[]>([]);
   const [pastError, setPastError] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const costRef = useRef<HTMLDivElement>(null);
@@ -100,6 +102,27 @@ export default function Home() {
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
   }, [costOpen]);
 
+  // A review with one reviewer is shown as a one-on-one: once its events have loaded, their verdict
+  // becomes the first message of a chat that knows the review, so you can ask them about it.
+  useEffect(() => {
+    if (!soloOpen || !reviewId) return;
+    const v = room.verdicts.find((x) => x.persona_id === soloOpen);
+    if (!v) {
+      if (room.status === "error" || room.status === "paused") setSoloOpen(null); // nothing to show as a chat: stay in the room
+      return;
+    }
+    const who = soloOpen;
+    setSoloOpen(null);
+    api.startChat({ persona_id: who, review_id: reviewId, with_history: true })
+      .then((c) => {
+        setChat({ ...c, messages: [{ role: "agent", kind: "verdict", text: v.headline, headline: v.headline,
+                                      claims: v.reasons, rejected: v.rejected, stance: v.verdict,
+                                      what_would_change_my_mind: v.what_would_change_my_mind }] });
+        setMode("chat");
+      })
+      .catch(() => setMode("room"));
+  }, [soloOpen, reviewId, room.verdicts, room.status]);
+
   // live event stream for the review on screen; replays from the start on reload
   useEffect(() => {
     if (!reviewId) return;
@@ -118,12 +141,14 @@ export default function Home() {
   const started = reviewId !== null;
   const names = Object.fromEntries(personas.map((p) => [p.id, p.name]));
   const inRoom = started ? room.personaIds : selected;
-  const projectName = room.project?.name ?? (started ? "…" : "your project");
+  // in a one-on-one that did not come from a room, the chat knows the project's name
+  const projectName = room.project?.name ?? (mode === "chat" && chat ? chat.project_name : started ? "…" : "your project");
 
   // round 1 + debate (2 turns each, 12 at most) + verdicts + summary, plus one vision call per
   // live-site screenshot described
   const siteCalls = site.trim() ? (quota?.site_calls ?? 4) : 0;
-  const needed = selected.length ? costFor(selected.length) + siteCalls : 0;
+  // one reviewer is a one-on-one: their verdict is a single request, not a room
+  const needed = selected.length ? (selected.length === 1 ? 1 : costFor(selected.length)) + siteCalls : 0;
   const left = quota?.free_quota?.remaining ?? null;
   // what the meter measures against: the review on the form, or one message in one-on-one
   const meterNeed = mode === "chat" ? 1 : needed;
@@ -135,6 +160,22 @@ export default function Home() {
   const start = async (sample: boolean) => {
     setStarting(true);
     setStartError(null);
+    // one reviewer picked: no room to debate in, so it is a one-on-one with them. They give their
+    // own verdict first, then you can ask them about it.
+    if (!sample && selected.length === 1) {
+      try {
+        const c = await api.startChat({ persona_id: selected[0], repo_url: repo.trim(), site_url: site.trim(), demo });
+        const v = await api.chatVerdict(c.id);
+        setReviewId(null);
+        setUrl({ review: null });
+        setChat({ ...c, messages: [v] });
+        setMode("chat");
+      } catch (e) {
+        setStartError((e as Error).message);
+      }
+      setStarting(false);
+      return;
+    }
     try {
       const { id } = await api.startReview(sample ? { sample: true, persona_ids: selected }
                                                   : { repo_url: repo.trim(), site_url: site.trim(), demo, persona_ids: selected });
@@ -154,10 +195,15 @@ export default function Home() {
     setUrl({ review: null, chat: null });
   };
 
+  const rooms = past.filter((r) => r.persona_ids.length > 1);
+  const solo = past.filter((r) => r.persona_ids.length === 1);
+
   const openDrawer = async () => {
     setDrawer((d) => !d);
     try {
-      setPast(await api.reviews());
+      const [reviews, chatList] = await Promise.all([api.reviews(), api.chats()]);
+      setPast(reviews);
+      setPastChats(chatList);
       setPastError(false);
     } catch {
       setPastError(true);
@@ -286,12 +332,38 @@ export default function Home() {
             <button type="button" className="link-btn" onClick={() => setDrawer(false)}>Close</button>
           </div>
           {pastError && <p className="form-error" role="alert">Could not load past reviews. Close this and try again.</p>}
-          {!pastError && past.length === 0 && <p className="muted">No reviews yet.</p>}
-          {past.map((r) => (
+          {!pastError && past.length === 0 && pastChats.length === 0 && <p className="muted">Nothing yet. Reviews and one-on-one chats show up here.</p>}
+          {/* a review with one reviewer is a one-on-one, so it is listed with the chats below */}
+          {rooms.length > 0 && <h3 className="drawer-head">Room reviews</h3>}
+          {rooms.map((r) => (
             <button key={r.id} type="button" className="drawer-item"
                     onClick={() => { setDrawer(false); setMode("room"); setChat(null); setReviewId(r.id); }}>
               <strong>{r.project_name}</strong>
               <span className="evidence">{r.status} · {r.persona_ids.length} reviewers · {r.created_at.replace("T", " ").slice(0, 16)}</span>
+            </button>
+          ))}
+          {!pastError && (past.length > 0 || pastChats.length > 0) && <h3 className="drawer-head">One-on-one chats</h3>}
+          {solo.map((r) => (
+            <button key={r.id} type="button" className="drawer-item"
+                    onClick={() => { setDrawer(false); setChat(null); setSoloOpen(r.persona_ids[0]); setReviewId(r.id); }}>
+              <strong>{r.project_name}</strong>
+              <span className="evidence">{names[r.persona_ids[0]] ?? r.persona_ids[0]} · {r.status} · {r.created_at.replace("T", " ").slice(0, 16)}</span>
+            </button>
+          ))}
+          {!pastError && past.length > 0 && pastChats.length === 0 && solo.length === 0 && (
+            <p className="muted" style={{ fontSize: 13, margin: 0 }}>None yet. Open a finished review and pick a reviewer in the &ldquo;To:&rdquo; box.</p>
+          )}
+          {pastChats.map((c) => (
+            <button key={c.id} type="button" className="drawer-item"
+                    onClick={async () => {
+                      try {
+                        setChat(await api.chat(c.id));
+                        setMode("chat");
+                        setDrawer(false);
+                      } catch { setPastError(true); }
+                    }}>
+              <strong>{c.project_name || "project"}</strong>
+              <span className="evidence">{names[c.persona_id] ?? c.persona_id} · {c.messages} messages · {c.updated_at.replace("T", " ").slice(0, 16)}</span>
             </button>
           ))}
         </aside>
@@ -303,11 +375,6 @@ export default function Home() {
             <div className="row topbar-left" style={{ gap: 16 }}>
               <a href="/?view=home" aria-label="Project Jury home"><img className="sc-logo" src={dark ? "/brand/logo-dark.svg" : "/brand/logo-light.svg"} alt="Project Jury" height={44} /></a>
               <div className="crumb">/ {projectName}</div>
-              {mode === "room" && (
-                <span className="sc-status" role="status">
-                  {room.status === "done" ? "Review complete" : room.status === "paused" ? `${ROUND_LABEL[room.round]} · waiting for you` : ROUND_LABEL[room.round]}
-                </span>
-              )}
             </div>
             <div className="row">
               {/* the remaining count comes from the provider; when it is not available (another provider,
@@ -339,19 +406,21 @@ export default function Home() {
                 </div>
               )}
               <ThemeSwitch dark={dark} onPick={pickTheme} />
-              <div className="toggle" role="group" aria-label="Mode">
-                <button type="button" aria-pressed={mode === "room"} onClick={() => setMode("room")}>Room</button>
-                <button type="button" aria-pressed={mode === "chat"} onClick={() => setMode("chat")}>One-on-one</button>
-              </div>
+              {/* no Room / One-on-one switch: a one-on-one chat opens from a finished review (the message bar)
+                  or from Past, and "back to the room" returns from it */}
+              {mode === "chat" && (
+                <button type="button" className="btn ghost" onClick={() => setMode("room")}>Back to the room</button>
+              )}
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h1>Is {projectName} useful?</h1>
             <div className="mono" style={{ fontSize: 13, color: "var(--faint)", overflowWrap: "anywhere" }}>
-              {room.project ? `${room.project.repo_url} · ${room.project.files} files read · ${room.project.demo_steps ? `${room.project.demo_steps} demo steps` : "no demo"}` +
+              {mode === "chat" && chat && !room.project ? `A one-on-one with the ${names[chat.persona_id] ?? "reviewer"}. Ask them about their review.`
+               : room.project ? `${room.project.repo_url} · ${room.project.files ? `${room.project.files} files read` : "live site only"} · ${room.project.demo_steps ? `${room.project.demo_steps} demo steps` : "no demo"}` +
                               (room.project.site_views ? ` · ${room.project.site_views} live site views` : "")
-                            : "Give a GitHub link and a short walkthrough. The panel reads it, asks what is missing, debates, and decides."}
+                            : "Paste a GitHub link. The panel reads it, debates, and decides."}
             </div>
             {loadError && (
               <div className="row" role="alert">
@@ -361,7 +430,7 @@ export default function Home() {
             )}
           </div>
 
-          {mode === "chat" ? (
+          {soloOpen ? <p className="muted">Opening the one-on-one…</p> : mode === "chat" ? (
             <ChatView personas={personas} reviewId={reviewId} reviewDone={room.status === "done"}
                       chat={chat} setChat={setChat} initialPersona={chatPersona} />
           ) : (
@@ -391,11 +460,14 @@ export default function Home() {
                       <label htmlFor="repo" className="label">GitHub link</label>
                       <input id="repo" className="input" placeholder="https://github.com/you/repo" value={repo}
                              onChange={(e) => setRepo(e.target.value)} />
-                      <label htmlFor="site" className="label">Live site <span className="muted">(optional)</span></label>
+                      <label htmlFor="site" className="label">Live site</label>
                       <input id="site" className="input" type="text" inputMode="url" autoComplete="url" spellCheck={false} placeholder="https://your-app.example.com"
                              value={site} onChange={(e) => setSite(e.target.value)} aria-describedby="site-hint" />
                       <span id="site-hint" className="muted" style={{ fontSize: 12 }}>
-                        Public pages only. The panel sees the first screen and up to 3 linked pages, on desktop and phone.
+                        {/* either field is enough; a site alone is judged on how it looks and works, not on code */}
+                        {!repo.trim() && site.trim()
+                          ? "Site only: the panel judges how it looks and works, not the code."
+                          : "Give either one, or both. Public pages only."}
                       </span>
                     </div>
                     <div className="field">
@@ -410,13 +482,10 @@ export default function Home() {
                   {/* what a review costs is shown by the meter in the top bar, not here */}
                   {startError && <div className="form-error">{startError}</div>}
                   <div className="row">
-                    <button type="submit" className="btn" disabled={starting || !repo.trim() || !selected.length}>
-                      {starting ? "Starting…" : "Start review"}
+                    <button type="submit" className="btn" disabled={starting || (!repo.trim() && !site.trim()) || !selected.length}>
+                      {starting ? (selected.length === 1 ? `${names[selected[0]] ?? "They"} is reviewing…` : "Starting…")
+                        : selected.length === 1 ? `Chat with ${names[selected[0]] ?? "them"}` : "Start review"}
                     </button>
-                    <button type="button" className="btn ghost" disabled={starting || !selected.length} onClick={() => start(true)}>
-                      Try the sample project
-                    </button>
-                    <span className="muted" style={{ fontSize: 13 }}>Free. Public repos only. A review takes 1 to 3 minutes. No repo yet? The sample runs a full review.</span>
                   </div>
                 </form>
               )}

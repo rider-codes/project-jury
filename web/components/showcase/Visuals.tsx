@@ -120,7 +120,7 @@ export function Pipeline() {
         </div>
         <span className="label">Step 1</span>
         <h3>Read</h3>
-        <p>Your public repo and a short walkthrough become one brief: key files, the full file list, and your demo steps.</p>
+        <p>Your repo and a short walkthrough become one brief.</p>
       </li>
 
       <li className="sc-stage">
@@ -132,7 +132,7 @@ export function Pipeline() {
         </div>
         <span className="label">Step 2</span>
         <h3>First impressions</h3>
-        <p>Each reviewer judges alone. Duplicate questions merge into one card, and the room waits for your answer.</p>
+        <p>Each reviewer judges alone, then asks you what is missing.</p>
       </li>
 
       <li className="sc-stage">
@@ -144,7 +144,7 @@ export function Pipeline() {
         </div>
         <span className="label">Step 3</span>
         <h3>Debate</h3>
-        <p>A moderator written in code, not a model, picks who speaks. Changing a stance needs a stated reason.</p>
+        <p>A moderator written in code picks who speaks next.</p>
       </li>
 
       <li className="sc-stage">
@@ -159,7 +159,7 @@ export function Pipeline() {
         </div>
         <span className="label">Step 4</span>
         <h3>Verdicts</h3>
-        <p>Each reviewer answers their own question, with reasons and what would change their mind. Then a summary.</p>
+        <p>Each reviewer answers one question. Then a summary.</p>
       </li>
     </ol>
   );

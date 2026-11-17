@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage, Persona, ReviewListItem } from "./types";
+import type { Chat, ChatListItem, ChatMessage, Persona, ReviewListItem } from "./types";
 
 // A production build is served by the API server itself, so it talks to its own origin.
 // `npm run dev` runs on :3000 next to the API on :8000.
@@ -42,9 +42,11 @@ export const api = {
   answer: (id: string, answers: Record<string, string>) => post<{ ok: true }>(`/api/reviews/${id}/answers`, { answers }),
   say: (id: string, to: string, text: string) => post<{ ok: true }>(`/api/reviews/${id}/messages`, { to, text }),
   retry: (id: string) => post<{ impressions: string[]; verdicts: string[]; summary: boolean }>(`/api/reviews/${id}/retry`, {}),
-  startChat: (body: { persona_id: string; review_id?: string; with_history?: boolean; sample?: boolean; repo_url?: string }) =>
+  startChat: (body: { persona_id: string; review_id?: string; with_history?: boolean; sample?: boolean; repo_url?: string; site_url?: string; demo?: string }) =>
     post<Chat>("/api/chats", body),
+  chats: () => call<ChatListItem[]>("/api/chats"),
   chat: (id: string) => call<Chat>(`/api/chats/${id}`),
   sendChat: (id: string, text: string) => post<ChatMessage>(`/api/chats/${id}/messages`, { text }),
+  chatVerdict: (id: string) => post<ChatMessage>(`/api/chats/${id}/verdict`, {}),
   eventsUrl: (id: string) => `${API}/api/reviews/${id}/events`,
 };

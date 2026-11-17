@@ -39,6 +39,9 @@ def _check_tree(claim: Claim, brief: Brief) -> ClaimCheck:
     ev = claim.evidence
     target = _norm(ev.quote).strip("/ \"'")
     mode = ev.ref.strip().lower()
+    if not brief.tree:
+        # a site-only review has no repo at all; an empty tree would make every "absent" claim pass
+        return ClaimCheck(claim=claim, ok=False, problem="no repository was given, so the file tree cannot be checked")
     hit = any(target in p.lower() for p in brief.tree)
     if mode == "present":
         ok, problem = hit, f"no path in the tree matches {ev.quote!r}"

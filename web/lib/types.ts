@@ -67,6 +67,14 @@ export type Summary = {
 
 export type ReviewEvent = { type: string; [key: string]: unknown };
 
+export type ChatListItem = {
+  id: string;
+  persona_id: string;
+  project_name: string;
+  messages: number;
+  updated_at: string;
+};
+
 export type ReviewListItem = {
   id: string;
   project_name: string;
@@ -78,6 +86,9 @@ export type ReviewListItem = {
 
 export type ChatMessage = {
   role: "user" | "agent";
+  kind?: "verdict"; // a one-on-one review: the reviewer's own verdict on the project
+  headline?: string;
+  what_would_change_my_mind?: string[];
   text: string;
   claims?: Claim[];
   rejected?: Rejected[];

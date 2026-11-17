@@ -126,9 +126,8 @@ export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
           <section className="section sc-hero-copy" style={{ gap: 18 }}>
             <h1>Is your project <mark className="sc-mark">useful</mark>? Ask a jury.</h1>
             <p className="body" style={{ fontSize: 18, maxWidth: 760 }}>
-              A panel of AI reviewers (a senior engineer, a product manager, a UX designer, an everyday user and more)
-              reads your GitHub repo, asks what is missing, debates, and gives an honest verdict.
-              Every claim must quote your actual files, or it is thrown out.
+              Six AI reviewers read your GitHub repo, debate it, and give an honest verdict.
+              Every claim has to quote your real files.
             </p>
             <div className="row">
               <button type="button" className="btn" onClick={watch}>Watch a real review</button>
@@ -138,7 +137,7 @@ export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
               <a className="link-btn" href="#how" style={{ color: "var(--text)" }}>How it works</a>
             </div>
             <span className="muted" style={{ fontSize: 14 }}>
-              Free. Works with public GitHub repos. {signedIn ? "A review takes 1 to 3 minutes." : "Running your own review needs an access code, which you can request."}
+              Free · public GitHub repos · {signedIn ? "1 to 3 minutes" : "needs an access code"}
             </span>
             {rec && <HeroArt personas={rec.personas} />}
           </section>
@@ -161,8 +160,7 @@ export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
               <span className="muted" style={{ fontSize: 14 }}>A checker written in plain code, not a model</span>
             </div>
             <p className="body" style={{ margin: 0, maxWidth: 760 }}>
-              Every point must quote a file, a demo step, or the repo&rsquo;s file list. The checker looks each quote up
-              and throws out anything it cannot find, so reviewers cannot invent facts about your project.
+              Each point must quote your project. A checker looks the quote up and drops anything it cannot find.
             </p>
             <EvidenceDemo />
           </section>
@@ -175,15 +173,6 @@ export function Showcase({ signedIn = false }: { signedIn?: boolean }) {
             {rec && (
               <PersonaPicker personas={rec.personas} selected={started ? room.personaIds : rec.personas.map((p) => p.id)}
                              stance={room.stance} state={room.personaState} speaking={room.speaking} />
-            )}
-            {rec && !started && (
-              <div className="grid">
-                {rec.personas.map((p) => (
-                  <div key={p.id} className="body" style={{ flex: "1 1 300px", fontSize: 14 }}>
-                    <strong style={{ color: "var(--text)" }}>{p.name}:</strong> &ldquo;{p.verdict_question}&rdquo;
-                  </div>
-                ))}
-              </div>
             )}
           </section>
 

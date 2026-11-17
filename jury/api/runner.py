@@ -14,6 +14,7 @@ from jury.agent import JsonModel
 from jury.api.store import ReviewStore
 from jury.ingest.brief import build_brief
 from jury.ingest.site_log import add_site
+from jury.ingest.brief import site_only_brief
 from jury.models import Persona
 from jury.room.events import stream_events
 from jury.room.graph import build_graph, initial_state
@@ -121,13 +122,20 @@ class Runner:
     async def _start(self, review_id, persona_ids, brief, repo_url, demo_text, site_url="") -> None:
         try:
             if brief is None:
-                self.store.add_event(review_id, {"type": "status", "stage": "ingesting", "repo_url": repo_url})
-                b = await asyncio.to_thread(self.brief_builder, repo_url, demo_text,
-                                            os.environ.get("GITHUB_TOKEN") or None)
+                if repo_url:
+                    self.store.add_event(review_id, {"type": "status", "stage": "ingesting", "repo_url": repo_url})
+                    b = await asyncio.to_thread(self.brief_builder, repo_url, demo_text,
+                                                os.environ.get("GITHUB_TOKEN") or None)
+                else:
+                    b = site_only_brief(site_url, demo_text)  # a review of the live site alone
                 if site_url:
                     # the screenshot log's vision calls go on this review's budget
                     self.store.add_event(review_id, {"type": "status", "stage": "site", "site_url": site_url})
                     b = await self.site_adder(self._llm(review_id), b, site_url)
+                if not repo_url and not b.site:
+                    # with no repo, a site that could not be opened leaves nothing to review
+                    reason = next((n for n in b.notes if n.startswith("live site not captured")), "the site could not be opened")
+                    raise RuntimeError(reason)
                 brief = b.model_dump()
             self.store.rename(review_id, brief["project_name"], brief["repo_url"])
             self.store.add_event(review_id, {

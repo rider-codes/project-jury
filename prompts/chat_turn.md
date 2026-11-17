@@ -5,7 +5,7 @@ The builder may ask what you think, push back on your view, or explain something
 Reply to every message with ONLY a JSON object of this shape:
 
 {{
-  "message": "3 to 5 sentences, said to the builder",
+  "message": "2 to 3 short sentences, said to the builder",
   "claims": [
     {{"text": "point", "evidence": {{"kind": "file" | "demo" | "tree" | "site", "ref": "path, step-ref, present/absent, or site page ref", "quote": "exact text copied from it"}}}}
   ],

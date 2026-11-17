@@ -290,3 +290,74 @@ def test_chat_about_a_repo_without_a_review(client):
     assert broken.status_code == 422 and "private repos" in broken.json()["detail"]
 
     assert client.post("/api/chats", json={"persona_id": "hiring_manager"}).status_code == 422
+
+
+def test_past_chats_are_listed_once_they_have_a_message(client):
+    chat = client.post("/api/chats", json={"persona_id": "hiring_manager", "repo_url": "https://github.com/o/widget"}).json()
+    assert client.get("/api/chats").json() == []  # started but never used: not worth showing
+    client.post(f"/api/chats/{chat['id']}/messages", json={"text": "Would you hire me?"})
+    (item,) = client.get("/api/chats").json()
+    assert item["id"] == chat["id"] and item["project_name"] == "widget" and item["messages"] == 2
+
+
+
+def test_one_on_one_verdict_is_short_card_and_kept_in_the_chat(client):
+    chat = client.post("/api/chats", json={"persona_id": "senior_engineer", "repo_url": "https://github.com/o/widget"}).json()
+    v = client.post(f"/api/chats/{chat['id']}/verdict")
+    assert v.status_code == 200
+    v = v.json()
+    assert v["kind"] == "verdict" and v["stance"] in {"useful", "unsure", "not useful"} and v["headline"]
+    reply = client.post(f"/api/chats/{chat['id']}/messages", json={"text": "Why?"}).json()
+    assert reply["role"] == "agent"
+    kinds = [m.get("kind") for m in client.get(f"/api/chats/{chat['id']}").json()["messages"]]
+    assert kinds == ["verdict", None, None]  # the verdict, then the question and the answer
+
+
+
+def _site_only_app(tmp_path, capture_ok=True):
+    from jury.models import SiteView
+
+    async def fake_site(llm, brief, site_url):
+        if not capture_ok:
+            return brief.model_copy(update={"site_url": site_url, "notes": [*brief.notes, "live site not captured: could not open it"]})
+        view = SiteView(ref="page-1-desktop", url=site_url, width="desktop", title="Shop",
+                        headings=["Welcome"], text="Buy things here")
+        return brief.model_copy(update={"site_url": site_url, "site": [view]})
+
+    def no_repo(*a, **k):
+        raise AssertionError("a site-only review must not read a repo")
+
+    app = create_app(str(tmp_path / "j.sqlite"), lambda: DemoLLM(delay=0), brief_builder=no_repo, site_adder=fake_site)
+    return TestClient(app)
+
+
+def test_review_from_a_live_site_alone(tmp_path):
+    with _site_only_app(tmp_path) as c:
+        assert c.post("/api/reviews", json={"persona_ids": ["ux_designer"]}).status_code == 422  # nothing given
+        rid = c.post("/api/reviews", json={"site_url": "https://www.shop.example", "persona_ids": ["ux_designer"]}).json()["id"]
+        assert run_to_done(c, rid) == "done"
+        brief = next(e for e in sse(c, rid)[0] if e["type"] == "brief")
+        assert brief["project_name"] == "shop.example" and brief["files"] == 0 and brief["site_views"] == 1
+        assert any("live site only" in n for n in brief["notes"])
+
+
+def test_site_only_review_stops_when_the_site_cannot_be_opened(tmp_path):
+    with _site_only_app(tmp_path, capture_ok=False) as c:
+        rid = c.post("/api/reviews", json={"site_url": "https://down.example", "persona_ids": ["ux_designer"]}).json()["id"]
+        assert wait_for(c, rid, {"error", "done"}) == "error"
+        err = next(e for e in sse(c, rid)[0] if e["type"] == "error")
+        assert "could not open" in err["message"]
+
+
+
+def test_one_reviewer_chat_from_a_live_site(tmp_path):
+    """Picking one reviewer starts a one-on-one; it can be about a live site alone."""
+    with _site_only_app(tmp_path) as c:
+        chat = c.post("/api/chats", json={"persona_id": "ux_designer", "site_url": "https://www.shop.example"})
+        assert chat.status_code == 201 and chat.json()["project_name"] == "shop.example"
+        v = c.post(f"/api/chats/{chat.json()['id']}/verdict").json()
+        assert v["kind"] == "verdict"
+    (tmp_path / "down").mkdir()
+    with _site_only_app(tmp_path / "down", capture_ok=False) as c:
+        r = c.post("/api/chats", json={"persona_id": "ux_designer", "site_url": "https://down.example"})
+        assert r.status_code == 422 and "could not open" in r.json()["detail"]

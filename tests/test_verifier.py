@@ -119,3 +119,14 @@ def test_answer_evidence_needs_an_actual_answer():
     skipped = check_claim(claim("answer", "q1", "anything at all"), BRIEF, {"q2": "an answer"})
     assert not skipped.ok and "no answer" in skipped.problem
     assert not check_claim(claim("answer", "q2", "an answer"), BRIEF).ok  # round 1: nothing was asked yet
+
+
+
+def test_tree_claims_fail_when_there_is_no_repo():
+    """A site-only review has an empty tree; "this file is missing" must not pass by default."""
+    from jury.models import Brief, Claim, Evidence
+    from jury.verifier import verify_claims
+    brief = Brief(project_name="site", repo_url="https://example.com", summary="s", files={}, tree=[])
+    claim = Claim(text="There are no tests.", evidence=Evidence(kind="tree", ref="absent", quote="tests/"))
+    kept, rejected = verify_claims([claim], brief)
+    assert not kept and "no repository" in rejected[0].problem

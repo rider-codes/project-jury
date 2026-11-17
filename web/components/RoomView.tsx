@@ -3,8 +3,8 @@
 import { useState } from "react";
 import type { RoomState } from "@/lib/room";
 import type { Persona } from "@/lib/types";
-import { download, fileName, reportHtml, reportMarkdown } from "@/lib/report";
-import { Avatar, Claims, StanceBadge, accentStyle } from "./bits";
+import { downloadPdf } from "@/lib/reportPdf";
+import { Avatar, Claims, Gist, More, ReadMore, StanceBadge, accentStyle, evidenceLabel, plural, sentences_ } from "./bits";
 
 type Props = {
   room: RoomState;
@@ -18,12 +18,11 @@ type Props = {
 
 /** The first sentence, for the compact replay. */
 function short(text: string): string {
-  const parts = text.match(/[^.!?]+[.!?]+(\s|$)/g);
+  const parts = sentences_(text);
   return parts && parts.length > 1 ? parts.slice(0, 1).join("").trim() : text;
 }
 
-export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: Props) {
-  const limit = compact ? 1 : undefined;
+export function RoomView({ room, names, personas, onAnswer, onRetry, readOnly, compact }: Props) {
   const name = (id: string) => names[id] ?? id;
   // what a retry would run: reviewers with no verdict, or a summary the moderator could not write
   const over = room.status === "done" || room.status === "error";
@@ -38,7 +37,9 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
     <>
       {room.status === "ingesting" && <p className="muted">{room.capturing ? "Opening your live site and taking screenshots at desktop and phone width…" : "Reading the repository and building the project brief…"}</p>}
       {room.project && room.project.notes.length > 0 && (
-        <p className="muted" style={{ fontSize: 13 }}>Brief notes: {room.project.notes.join(" · ")}</p>
+        <More label={`${plural(room.project.notes.length, "note")} on what was read`}>
+          <p className="muted" style={{ fontSize: 13, margin: 0 }}>{room.project.notes.join(" · ")}</p>
+        </More>
       )}
 
       {room.round >= 1 && (
@@ -47,43 +48,69 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
             <div id="r1" className="label">Round 1 · First impressions</div>
             <div className="muted" style={{ fontSize: 13 }}>Each reviewer judged alone</div>
           </div>
-          <div className="grid">
+          {/* the whole room reads as one conversation: each reviewer speaks in a chat bubble */}
+          <div className="feed room-chat">
             {room.impressions.map((imp) => (
-              <article key={imp.persona_id} className="card" style={accentStyle(imp.persona_id)}>
-                <div className="card-head">
-                  <Avatar id={imp.persona_id} />
-                  <span className="who">The {name(imp.persona_id)}</span>
-                  <StanceBadge stance={imp.stance} />
+              <div key={imp.persona_id} className="turn" style={accentStyle(imp.persona_id)}>
+                <Avatar id={imp.persona_id} />
+                <div className="bubble">
+                  <div className="row" style={{ gap: 8 }}>
+                    <span className="name">{name(imp.persona_id)}</span>
+                    <StanceBadge stance={imp.stance} />
+                  </div>
+                  <div className="msg">{imp.headline}</div>
+                  {imp.claims.length + imp.rejected.length > 0 && (
+                    <More label={`Why · ${plural(imp.claims.length, "point")} with evidence`}>
+                      <Claims claims={imp.claims} rejected={imp.rejected} />
+                    </More>
+                  )}
                 </div>
-                <div className="headline">{imp.headline}</div>
-                <Claims claims={imp.claims} rejected={imp.rejected} limit={limit} brief={compact} />
-              </article>
+              </div>
             ))}
             {room.personaIds
               .filter((p) => room.personaState[p] === "error" && !room.impressions.some((i) => i.persona_id === p))
               .map((p) => (
-                <article key={p} className="card" style={accentStyle(p)}>
-                  <div className="card-head"><Avatar id={p} /><span className="who">The {name(p)}</span></div>
-                  <div className="body">Could not answer, so they sit out the rest of this review.</div>
-                </article>
+                <div key={p} className="turn" style={accentStyle(p)}>
+                  <Avatar id={p} />
+                  <div className="bubble">
+                    <span className="name">{name(p)}</span>
+                    <div className="msg muted">Could not answer, so they sit out the rest of this review.</div>
+                  </div>
+                </div>
               ))}
           </div>
         </section>
       )}
 
       {room.answered.length > 0 && (
-        <details className="section answered-list" open={room.answered.length <= 3}>
+        <details className="section answered-list">
           <summary className="label" style={{ cursor: "pointer" }}>
             Your answers · {room.answered.length} question{room.answered.length > 1 ? "s" : ""} asked,{" "}
             {room.answered.filter((a) => a.answer).length} answered
           </summary>
-          {room.answered.map(({ question, answer }) => (
-            <div key={question.id} className="answered">
-              <strong style={{ color: "var(--text-2)" }}>{question.text}</strong>
-              <br />
-              {answer ? answer : <em>Skipped</em>}
-            </div>
-          ))}
+          {/* as a conversation: the reviewer asks, you answer */}
+          <div className="qa-chat">
+            {room.answered.map(({ question, answer }) => {
+              const who = question.asked_by?.[0];
+              return (
+                <div key={question.id} className="qa-pair">
+                  <div className="turn" style={who ? accentStyle(who) : undefined}>
+                    {who && <Avatar id={who} />}
+                    <div className="bubble">
+                      <span className="name">{question.asked_by?.map(name).join(", ") || "The room"}</span>
+                      <div className="msg">{question.text}</div>
+                    </div>
+                  </div>
+                  <div className="turn mine">
+                    <div className="bubble">
+                      <span className="name">You</span>
+                      <div className="msg">{answer ? <Gist text={answer} /> : <em className="muted">Skipped</em>}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </details>
       )}
 
@@ -116,20 +143,28 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
               <div key={i} className="turn" style={accentStyle(item.turn.speaker)}>
                 <Avatar id={item.turn.speaker} />
                 <div className="bubble">
-                  <span className="name">{name(item.turn.speaker)}</span>
+                  <div className="row" style={{ gap: 8 }}>
+                    <span className="name">{name(item.turn.speaker)}</span>
+                    {!item.turn.error && item.turn.stance && <StanceBadge stance={item.turn.stance} />}
+                  </div>
                   {item.turn.contrarian && !item.turn.error && <span className="devil">arguing the other side</span>}
                   {item.turn.addressed_by_user && !item.turn.error && <span className="devil">answering you</span>}
                   {item.turn.error ? (
                     <div className="msg muted">Could not respond this turn.</div>
                   ) : (
                     <>
-                      <div className="msg">{compact ? short(item.turn.message) : item.turn.message}</div>
+                      {compact ? <div className="msg">{short(item.turn.message)}</div>
+                        : <ReadMore text={item.turn.message} animate={room.status === "running" && i === room.feed.length - 1} />}
                       {item.turn.stance_changed && (
                         <div className="change">
                           Changed stance to {item.turn.stance}: {item.turn.stance_change_reason}
                         </div>
                       )}
-                      {!compact && <Claims claims={item.turn.claims} rejected={item.turn.rejected} />}
+                      {!compact && item.turn.claims.length + item.turn.rejected.length > 0 && (
+                        <More label={evidenceLabel(item.turn.claims.length, item.turn.rejected.length)}>
+                          <Claims claims={item.turn.claims} rejected={item.turn.rejected} />
+                        </More>
+                      )}
                       {item.turn.challenges.length > 0 && (
                         <div className="evidence">challenges {item.turn.challenges.map(name).join(", ")}</div>
                       )}
@@ -150,25 +185,32 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
       {room.round >= 3 && (
         <section className="section" aria-labelledby="r3">
           <div id="r3" className="label">Round 3 · Final verdicts</div>
-          <div className="grid">
+          <div className="feed room-chat">
             {room.verdicts.map((v) => (
-              <article key={v.persona_id} className="card" style={accentStyle(v.persona_id)}>
-                <div className="card-head">
-                  <Avatar id={v.persona_id} />
-                  <span className="who">The {name(v.persona_id)}</span>
-                  <StanceBadge stance={v.verdict} />
-                </div>
-                <div className="headline">{v.headline}</div>
-                <Claims claims={v.reasons} rejected={v.rejected} limit={limit} brief={compact} />
-                {!compact && v.what_would_change_my_mind.length > 0 && (
-                  <div className="body" style={{ fontSize: 14 }}>
-                    <strong>What would change my mind:</strong>
-                    <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                      {v.what_would_change_my_mind.slice(0, compact ? 1 : undefined).map((w, i) => <li key={i}>{w}</li>)}
-                    </ul>
+              <div key={v.persona_id} className="turn" style={accentStyle(v.persona_id)}>
+                <Avatar id={v.persona_id} />
+                <div className="bubble">
+                  <div className="row" style={{ gap: 8 }}>
+                    <span className="name">{name(v.persona_id)}</span>
+                    <StanceBadge stance={v.verdict} />
                   </div>
-                )}
-              </article>
+                  <div className="msg"><strong>{v.headline}</strong></div>
+                  {(
+                    <>
+                      {v.reasons.length + v.rejected.length > 0 && (
+                        <More label={`Why · ${plural(v.reasons.length, "reason")} with evidence`}>
+                          <Claims claims={v.reasons} rejected={v.rejected} />
+                        </More>
+                      )}
+                      {v.what_would_change_my_mind.length > 0 && (
+                        <More label="What would change my mind">
+                          <ul className="more-list">{v.what_would_change_my_mind.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                        </More>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         </section>
@@ -194,19 +236,25 @@ export function RoomView({ room, names, onAnswer, onRetry, readOnly, compact }: 
                 )}
               </div>
               <div className="headline">{room.summary.headline}</div>
-              {[["Agreed", room.summary.agreed], ["Split", room.summary.split], ["Top changes", room.summary.top_changes]].map(
+              {/* what to do next is the part people want; each point shows its gist and opens on click */}
+              {room.summary.top_changes.length > 0 && (
+                <div>
+                  <div className="label" style={{ marginBottom: 6 }}>Top changes</div>
+                  <ul className="more-list">{room.summary.top_changes.map((t, i) => <li key={i}><Gist text={t} /></li>)}</ul>
+                </div>
+              )}
+              {[["Where they agreed", room.summary.agreed], ["Where they split", room.summary.split]].map(
                 ([label, items]) =>
                   (items as string[]).length ? (
-                    <div key={label as string}>
-                      <div className="label" style={{ marginBottom: 6 }}>{label as string}</div>
-                      <ul>{(items as string[]).map((t, i) => <li key={i}>{t}</li>)}</ul>
-                    </div>
+                    <More key={label as string} label={`${label} · ${(items as string[]).length}`}>
+                      <ul className="more-list">{(items as string[]).map((t, i) => <li key={i}><Gist text={t} /></li>)}</ul>
+                    </More>
                   ) : null,
               )}
-              {room.usage && (
+              {room.usage && !readOnly && (
                 <div className="evidence">{room.usage.calls} model calls · {room.usage.tokens.toLocaleString()} tokens</div>
               )}
-              {!readOnly && room.status === "done" && room.project && <ReportButtons room={room} names={names} />}
+              {!readOnly && room.status === "done" && room.project && <ReportButtons room={room} names={names} personas={personas} />}
             </>
           ) : room.status === "error" ? (
             <div className="form-error">The review stopped: {room.error}</div>
@@ -259,24 +307,23 @@ function RetryCard({ onRetry, who, stopped, summaryOnly }: {
   );
 }
 
-function ReportButtons({ room, names }: { room: RoomState; names: Record<string, string> }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
+function ReportButtons({ room, names, personas }: { room: RoomState; names: Record<string, string>; personas: Persona[] }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
     try {
-      await navigator.clipboard.writeText(reportMarkdown(room, names));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      download(fileName(room, "md"), reportMarkdown(room, names), "text/markdown");
+      await downloadPdf(room, names, Object.fromEntries(personas.map((p) => [p.id, p.verdict_question])));
+    } catch (e) {
+      setError(`Could not make the PDF: ${(e as Error).message}`);
     }
+    setBusy(false);
   };
   return (
     <div className="row report-actions">
-      <button type="button" className="btn" onClick={() => download(fileName(room, "html"), reportHtml(room, names), "text/html")}>
-        Download report
-      </button>
-      <button type="button" className="btn ghost" onClick={copy} aria-live="polite">{copied ? "Copied" : "Copy as Markdown"}</button>
-      <span className="muted" style={{ fontSize: 13 }}>One file you can send, or print to PDF.</span>
+      <button type="button" className="btn" onClick={save} disabled={busy}>{busy ? "Making the PDF…" : "Download PDF"}</button>
+      {error && <span className="form-error">{error}</span>}
     </div>
   );
 }

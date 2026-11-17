@@ -3,7 +3,7 @@
 A panel of AI reviewers that reads your software project and tells you, with evidence, whether it is useful.
 
 It is for solo builders and students with a side project or portfolio piece and nobody to give them honest
-feedback. You give a public GitHub link (and optionally a live site and a short walkthrough). Up to six
+feedback. You give a public GitHub link, a live site, or both (and optionally a short walkthrough). Up to six
 reviewers read it, ask you what is missing, debate each other, and each give a verdict: useful, unsure or
 not useful.
 
@@ -44,7 +44,7 @@ uv run python -m jury.api --demo-model --db jury_demo.sqlite
 cd web && npm run dev
 ```
 
-Open <http://localhost:3000> and press **Try the sample project**.
+Open <http://localhost:3000>, paste any public GitHub link and press **Start review**.
 
 **Run real reviews.** Copy `.env.example` to `.env`, set `JURY_PROVIDER` and its key (`OPENROUTER_API_KEY`
 or `GEMINI_API_KEY`), and set a model id for `JURY_MODEL_CHEAP`, `JURY_MODEL_MID` and `JURY_MODEL_STRONG`.
@@ -70,7 +70,9 @@ To let reviewers look at a live site, install the headless browser once:
 4. **Verdicts.** Each reviewer gives a structured verdict with reasons and what would change their mind,
    then a short summary is written.
 
-After a review you can talk to one reviewer on their own, with or without the room's history.
+After a review you can talk to one reviewer on their own, with or without the room's history. Pick only one
+reviewer before starting and it is a one-on-one from the start: they give their verdict, then you can ask them
+about it.
 
 ## Limits
 
